@@ -1,0 +1,24 @@
+Frontend file split (completed)
+===============================
+
+Files
+-----
+- index.html   — DOCTYPE, head (theme boot script + fonts + link to styles.css), body markup only.
+- styles.css   — All rules that lived in the former <style> block (variables, layout, components, media queries).
+- app.js       — All application JavaScript that lived in the former bottom <script> block.
+
+Kept inline in index.html
+-------------------------
+- Small IIFE in <head> that reads todoApp_theme from localStorage / prefers-color-scheme before paint
+  (avoids flash of wrong theme if this ran only from deferred app.js).
+
+Global / configuration to manage in app.js
+------------------------------------------
+- API_URL                    — change per deployment / stage
+- TASK_FILTER_KEY, THEME_KEY — localStorage keys
+- CLIENT_NEWS_FEEDS          — keep in sync with backend NEWS_FEEDS
+- Movies use weather countryCode (todoApp_weatherCity); backend uses TMDB (TMDB_API_KEY)
+
+Deploy
+------
+S3 bucket root (or CloudFront origin): upload index.html, styles.css, and app.js together; paths are relative.

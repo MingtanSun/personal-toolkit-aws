@@ -1,0 +1,51 @@
+API Gateway + Lambda compatibility (TMDB movies)
+===============================================
+
+Frontend HTTP usage (app.js)
+----------------------------
+- GET  /tasks
+- POST /tasks          (body: { title } | { op: "setCompleted", taskId, completed } | { op: "setStarred", taskId, starred })
+- DELETE /tasks/{id}
+- GET  /news
+- GET  /movies         (?region=CA&category=now&page=1)
+
+Not used by the SPA today
+--------------------------
+- PATCH /tasks/{id}    (same semantics as POST op=setCompleted for `completed` only; safe to keep for other clients)
+
+Required routes (HTTP API or REST)
+----------------------------------
+1. ANY /{proxy+} or per-route:
+   - GET    /tasks
+   - POST   /tasks
+   - DELETE /tasks/{id}
+   - PATCH  /tasks/{id}     (optional)
+   - GET    /news
+   - GET    /movies
+
+2. OPTIONS (preflight)
+   - Either enable CORS in API Gateway for these routes, OR
+   - Route OPTIONS to the same Lambda (Lambda returns 204 + Allow-Methods / Allow-Headers).
+
+Lambda environment variables
+----------------------------
+- TMDB_API_KEY           — required for GET /movies
+- TMDB_BASE_URL          — optional, default https://api.themoviedb.org/3
+- TMDB_IMAGE_BASE_URL    — optional, default https://image.tmdb.org/t/p/w342
+
+The default movie region is Canada (`CA`) when the weather city has no country code.
+Movie categories are `now` and `upcoming`; each category is paginated independently.
+
+Lambda response headers
+-----------------------
+All JSON responses include:
+  Content-Type: application/json
+  Access-Control-Allow-Origin: *
+
+OPTIONS responses add:
+  Access-Control-Allow-Methods: GET,POST,PATCH,DELETE,OPTIONS
+  Access-Control-Allow-Headers: content-type
+
+S3 static hosting
+-----------------
+Upload together: index.html, styles.css, app.js (same folder; relative URLs).

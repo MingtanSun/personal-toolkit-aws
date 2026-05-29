@@ -1,0 +1,5 @@
+这个项目是一个 serverless 个人 Dashboard
+	•	架构：S3 / API Gateway / Lambda / DynamoDB
+	•	支持功能：任务、新闻、天气、附近餐厅（OpenStreetMap + Overpass）
+	•	Region：Ohio (us-east-2)
+	•	Lambda 环境变量（可选）：OVERPASS_URL、OVERPASS_USER_AGENT

@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Personal Dashboard</title>
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("todoApp_theme");
+        if (t === "dark" || t === "light") {
+          document.documentElement.setAttribute("data-theme", t);
+        }
+      } catch (e) { /* ignore */ }
+    })();
+  </script>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="dashboard-container">
+    <header class="dashboard-header">
+      <div class="dashboard-header-text">
+        <h1 class="dashboard-title">Personal Toolkit</h1>
+        <p class="dashboard-date" id="dashboardDate"></p>
+      </div>
+      <button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle theme">☾</button>
+    </header>
+
+    <div class="dashboard-content">
+      <main class="dashboard-main" aria-label="Main content">
+        <section class="card card-news" aria-labelledby="newsHeading">
+          <h2 class="card-title" id="newsHeading">Latest news</h2>
+          <div class="news-filter-bar" id="newsFilterBar" hidden>
+            <span class="news-filter-label muted" id="newsFilterLabel">Source</span>
+            <div class="news-filter-chips" id="newsFilterChips"></div>
+          </div>
+          <p class="news-fallback-note muted" id="newsFallbackNote" hidden>
+            Loading headlines via RSS mirror (when API <code>/news</code> is unavailable or not configured).
+          </p>
+          <ul class="news-list" id="newsList">
+            <li class="news-loading" id="newsLoading">Loading…</li>
+          </ul>
+        </section>
+
+        <section class="card card-movies" aria-label="Local movies">
+          <div class="card-title-row">
+            <h2 class="card-title">Local movies</h2>
+            <button type="button" class="icon-btn" id="moviesRefresh" title="Refresh" aria-label="Refresh movie list">↻</button>
+          </div>
+          <p class="muted card-sub">Now playing and coming soon · TMDB</p>
+          <div class="movies-toolbar">
+            <p class="movies-region" id="moviesRegion" aria-live="polite">Canada</p>
+            <div class="movies-tabs" role="tablist" aria-label="Movie category">
+              <button type="button" class="chip is-active" id="moviesTabNow" data-movies-tab="now" role="tab" aria-selected="true">Now playing</button>
+              <button type="button" class="chip" id="moviesTabUpcoming" data-movies-tab="upcoming" role="tab" aria-selected="false">Coming soon</button>
+            </div>
+          </div>
+          <div id="moviesMount" class="movies-list" role="tabpanel" aria-labelledby="moviesTabNow"></div>
+          <div class="movies-pagination" id="moviesPagination" aria-label="Movie pagination">
+            <button type="button" class="btn-secondary" id="moviesPrev">Previous</button>
+            <span class="movies-page-label muted" id="moviesPageLabel">Page 1</span>
+            <button type="button" class="btn-secondary" id="moviesNext">Next</button>
+          </div>
+          <p class="card-footnote muted">
+            Movie data and images via
+            <a href="https://www.themoviedb.org/" target="_blank" rel="noopener noreferrer">TMDB</a>
+          </p>
+        </section>
+      </main>
+
+      <aside class="dashboard-sidebar" aria-label="Productivity tools">
+        <section class="card card-weather" id="weatherWidget" aria-label="Weather">
+          <h2 class="card-title" id="weatherCardTitle">Weather</h2>
+          <div class="weather-search">
+            <input
+              type="text"
+              id="weatherCitySearch"
+              class="input-field"
+              placeholder="Search city (e.g. London, Tokyo)"
+              autocomplete="off"
+              aria-label="Search city"
+            />
+            <button type="button" class="btn-secondary" id="weatherCitySearchBtn">Search</button>
+          </div>
+          <button type="button" class="link-btn" id="weatherUseLocation">Use my location</button>
+          <ul class="weather-city-results" id="weatherCityResults" role="listbox" aria-label="City search results"></ul>
+
+          <div class="weather-widget-main">
+            <div class="weather-icon-wrap" id="weatherEmoji" aria-hidden="true">☁</div>
+            <div class="weather-temp-block">
+              <div class="weather-temp-line">
+                <span class="weather-temp" id="weatherTemp">—</span><span class="weather-unit">°C</span>
+              </div>
+              <p class="weather-status" id="weatherDesc">Search for a city to see the forecast</p>
+            </div>
+            <button type="button" class="icon-btn" id="weatherRefresh" title="Refresh" aria-label="Refresh weather">↻</button>
+          </div>
+          <div class="weather-metrics" id="weatherDetails"></div>
+          <div class="weather-footer muted">
+            <span id="weatherLocation"></span>
+            <span id="weatherUpdated"></span>
+          </div>
+          <p class="card-footnote muted">
+            Location &amp; forecast via
+            <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a>
+          </p>
+        </section>
+
+        <section class="card card-tasks" aria-label="To-do list">
+          <h2 class="card-title">To-do</h2>
+          <div class="todo-input-row composer">
+            <input
+              id="taskInput"
+              class="todo-input"
+              type="text"
+              placeholder="Add a task…"
+              autocomplete="off"
+              aria-label="New task"
+            />
+            <button type="button" class="add-button" onclick="addTask()" aria-label="Add task">+</button>
+          </div>
+          <p id="addError" class="composer-error" role="alert" hidden></p>
+
+          <div class="task-filter-bar" role="toolbar" aria-label="Filter tasks">
+            <div class="task-filter-chips" id="taskFilterChips">
+              <button type="button" class="chip is-active" data-task-filter="all">All</button>
+              <button type="button" class="chip" data-task-filter="active">Active</button>
+              <button type="button" class="chip" data-task-filter="starred">Starred</button>
+            </div>
+          </div>
+
+          <div class="task-list-wrap">
+            <ul class="todo-list" id="taskList"></ul>
+          </div>
+        </section>
+      </aside>
+    </div>
+  </div>
+
+  <script src="app.js" defer></script>
+</body>
+</html>
