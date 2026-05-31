@@ -206,6 +206,12 @@ function clearAddError() {
 }
 
 const WEATHER_STORAGE_KEY = "todoApp_weatherCity";
+const DEFAULT_WEATHER_CITY = {
+  lat: 43.6532,
+  lon: -79.3832,
+  label: "Toronto, Ontario, Canada",
+  countryCode: "CA"
+};
 
 function getSavedWeatherCity() {
   try {
@@ -446,7 +452,7 @@ async function loadWeatherForCity(coords) {
 }
 
 function loadWeather() {
-  loadWeatherForCity(getSavedWeatherCity());
+  loadWeatherForCity(getSavedWeatherCity() || DEFAULT_WEATHER_CITY);
 }
 
 document.getElementById("weatherRefresh").addEventListener("click", () => loadWeather());
