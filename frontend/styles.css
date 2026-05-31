@@ -52,6 +52,34 @@ body {
   background: var(--bg);
 }
 
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(
+    circle 420px at var(--mouse-x, 50%) var(--mouse-y, 20%),
+    rgba(37, 99, 235, 0.08),
+    transparent 65%
+  );
+  opacity: 0.9;
+}
+
+html[data-theme="dark"] body::before {
+  background: radial-gradient(
+    circle 420px at var(--mouse-x, 50%) var(--mouse-y, 20%),
+    rgba(96, 165, 250, 0.14),
+    transparent 65%
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::before {
+    display: none;
+  }
+}
+
 a {
   color: var(--text-secondary);
   text-decoration: none;
@@ -66,6 +94,8 @@ a:hover {
 }
 
 .dashboard-container {
+  position: relative;
+  z-index: 1;
   max-width: 1440px;
   margin: 0 auto;
   padding: 28px 32px 48px;
@@ -292,12 +322,59 @@ html[data-theme="dark"] .dashboard-sidebar .card-weather {
 }
 
 .card {
+  position: relative;
+  overflow: hidden;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   padding: 18px;
   min-height: 0;
+}
+
+.card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+  background: radial-gradient(
+    circle 180px at var(--card-x, 50%) var(--card-y, 50%),
+    rgba(37, 99, 235, 0.10),
+    transparent 70%
+  );
+}
+
+.card:hover::before {
+  opacity: 1;
+}
+
+.card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.card:hover {
+  border-color: rgba(37, 99, 235, 0.22);
+}
+
+html[data-theme="dark"] .card::before {
+  background: radial-gradient(
+    circle 180px at var(--card-x, 50%) var(--card-y, 50%),
+    rgba(96, 165, 250, 0.14),
+    transparent 70%
+  );
+}
+
+html[data-theme="dark"] .card:hover {
+  border-color: rgba(96, 165, 250, 0.26);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card::before {
+    display: none;
+  }
 }
 
 .card-title {
@@ -693,6 +770,67 @@ html[data-theme="dark"] .weather-temp {
 
 .card-weather.is-error .weather-status {
   color: var(--warn);
+}
+
+.card-weather::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s ease, background 0.25s ease;
+  z-index: 0;
+}
+
+.card-weather > * {
+  position: relative;
+  z-index: 1;
+}
+
+.card-weather.weather-clear::after {
+  opacity: 1;
+  background: radial-gradient(circle at 78% 18%, rgba(245, 158, 11, 0.16), transparent 42%);
+}
+
+.card-weather.weather-cloudy::after {
+  opacity: 1;
+  background: radial-gradient(circle at 70% 16%, rgba(107, 114, 128, 0.12), transparent 45%);
+}
+
+.card-weather.weather-rain::after {
+  opacity: 1;
+  background:
+    radial-gradient(circle at 70% 18%, rgba(59, 130, 246, 0.12), transparent 42%),
+    repeating-linear-gradient(
+      115deg,
+      rgba(59, 130, 246, 0.04) 0,
+      rgba(59, 130, 246, 0.04) 1px,
+      transparent 1px,
+      transparent 10px
+    );
+}
+
+.card-weather.weather-snow::after {
+  opacity: 1;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(148, 163, 184, 0.16) 0 1px, transparent 2px),
+    radial-gradient(circle at 75% 28%, rgba(148, 163, 184, 0.12) 0 1px, transparent 2px),
+    radial-gradient(circle at 58% 72%, rgba(148, 163, 184, 0.10) 0 1px, transparent 2px);
+}
+
+.card-weather.weather-storm::after {
+  opacity: 1;
+  background: radial-gradient(circle at 76% 18%, rgba(99, 102, 241, 0.16), transparent 42%);
+}
+
+html[data-theme="dark"] .card-weather.weather-clear::after {
+  background: radial-gradient(circle at 78% 18%, rgba(251, 191, 36, 0.18), transparent 42%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-weather::after {
+    transition: none;
+  }
 }
 
 /* News */

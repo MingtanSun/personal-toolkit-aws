@@ -404,6 +404,31 @@ function decodeWmo(code) {
   return { icon: "☁", text: "Current conditions" };
 }
 
+const WEATHER_MOOD_CLASSES = [
+  "weather-clear",
+  "weather-rain",
+  "weather-snow",
+  "weather-cloudy",
+  "weather-storm"
+];
+
+function getWeatherMoodClass(code) {
+  const c = Number(code);
+  if (Number.isNaN(c)) return "weather-cloudy";
+  if (c === 0 || c === 1) return "weather-clear";
+  if ((c >= 51 && c <= 67) || (c >= 80 && c <= 82)) return "weather-rain";
+  if ((c >= 71 && c <= 77) || (c >= 85 && c <= 86)) return "weather-snow";
+  if (c >= 95 && c <= 99) return "weather-storm";
+  return "weather-cloudy";
+}
+
+function setWeatherMood(widget, code) {
+  if (!widget) return;
+  widget.classList.remove(...WEATHER_MOOD_CLASSES);
+  if (code == null) return;
+  widget.classList.add(getWeatherMoodClass(code));
+}
+
 function getGeoPosition(ms) {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
@@ -504,6 +529,7 @@ async function loadWeatherForCity(coords) {
 
   if (!coords) {
     widget.classList.remove("is-error");
+    setWeatherMood(widget, null);
     if (titleEl) titleEl.textContent = "Weather";
     elEmoji.textContent = "☁";
     elTemp.textContent = "—";
@@ -538,6 +564,7 @@ async function loadWeatherForCity(coords) {
     elEmoji.textContent = icon;
     elTemp.textContent = Math.round(cur.temperature_2m * 10) / 10;
     elDesc.textContent = text;
+    setWeatherMood(widget, cur.weather_code);
 
     const hum = cur.relative_humidity_2m != null ? `Humidity ${cur.relative_humidity_2m}%` : "";
     const wind = cur.wind_speed_10m != null ? `Wind ${Math.round(cur.wind_speed_10m)} km/h` : "";
@@ -554,6 +581,7 @@ async function loadWeatherForCity(coords) {
     renderWeatherForecast(data.daily);
   } catch (e) {
     widget.classList.add("is-error");
+    setWeatherMood(widget, null);
     elEmoji.textContent = "☁";
     elTemp.textContent = "—";
     elDesc.textContent = "Could not load weather. Try again.";
@@ -1277,6 +1305,49 @@ function applyTheme(theme) {
   syncThemeToggleUi();
 }
 
+function initPointerGlow() {
+  const root = document.documentElement;
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  if (reduceMotion.matches) return;
+
+  let raf = 0;
+  let nextX = "50%";
+  let nextY = "20%";
+
+  const update = () => {
+    root.style.setProperty("--mouse-x", nextX);
+    root.style.setProperty("--mouse-y", nextY);
+    raf = 0;
+  };
+
+  window.addEventListener(
+    "pointermove",
+    e => {
+      nextX = `${e.clientX}px`;
+      nextY = `${e.clientY}px`;
+      if (!raf) raf = requestAnimationFrame(update);
+    },
+    { passive: true }
+  );
+}
+
+function initCardSpotlight() {
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  if (reduceMotion.matches) return;
+
+  document.querySelectorAll(".card").forEach(card => {
+    card.addEventListener(
+      "pointermove",
+      e => {
+        const rect = card.getBoundingClientRect();
+        card.style.setProperty("--card-x", `${e.clientX - rect.left}px`);
+        card.style.setProperty("--card-y", `${e.clientY - rect.top}px`);
+      },
+      { passive: true }
+    );
+  });
+}
+
 function initThemeFromStorage() {
   try {
     const s = localStorage.getItem(THEME_KEY);
@@ -1299,6 +1370,8 @@ document.getElementById("themeToggle").addEventListener("click", () => {
 });
 
 initThemeFromStorage();
+initPointerGlow();
+initCardSpotlight();
 setHeaderTodayDate();
 loadWeather();
 loadMovies();
