@@ -30,7 +30,10 @@
     <div class="dashboard-content">
       <main class="dashboard-main" aria-label="Main content">
         <section class="card card-news" aria-labelledby="newsHeading">
-          <h2 class="card-title" id="newsHeading">Latest news</h2>
+          <div class="card-title-row">
+            <h2 class="card-title" id="newsHeading">Latest news</h2>
+            <button type="button" class="icon-btn" id="newsRefresh" title="Refresh" aria-label="Refresh news">↻</button>
+          </div>
           <div class="news-filter-bar" id="newsFilterBar" hidden>
             <span class="news-filter-label muted" id="newsFilterLabel">Source</span>
             <div class="news-filter-chips" id="newsFilterChips"></div>

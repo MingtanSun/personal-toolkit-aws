@@ -787,6 +787,20 @@ html[data-theme="dark"] .weather-temp {
   min-width: 0;
 }
 
+.task-title-edit {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: var(--surface);
+  border: 1px solid var(--accent-blue);
+  border-radius: 4px;
+  outline: none;
+}
+
 .task-title.done {
   text-decoration: line-through;
   color: var(--muted);

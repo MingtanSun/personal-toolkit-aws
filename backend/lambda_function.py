@@ -388,6 +388,19 @@ def handle_post_tasks(body):
         )
         return json_response(200, {"message": "Task updated"})
 
+    if body.get("op") == "rename":
+        task_id = body.get("taskId")
+        title = body.get("title")
+        if not task_id or title is None or not str(title).strip():
+            return error_response(400, "taskId and title are required")
+        title = str(title).strip()
+        table.update_item(
+            Key={"taskId": task_id},
+            UpdateExpression="SET title = :t",
+            ExpressionAttributeValues={":t": title},
+        )
+        return json_response(200, {"message": "Task updated"})
+
     title = body.get("title")
     completed = bool(body.get("completed", False))
     starred = bool(body.get("starred", False))

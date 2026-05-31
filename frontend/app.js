@@ -593,12 +593,19 @@ async function loadTasks() {
     const label = document.createElement("span");
     label.className = "task-title" + (task.completed ? " done" : "");
     label.textContent = task.title;
+    label.title = "Double-click to edit";
+    if (!task.completed) {
+      label.addEventListener("dblclick", e => {
+        e.preventDefault();
+        startTaskTitleEdit(task.taskId, task.title, li);
+      });
+    }
 
     const delBtn = document.createElement("button");
     delBtn.type = "button";
     delBtn.className = "btn btn-delete";
     delBtn.textContent = "Delete";
-    delBtn.onclick = () => deleteTask(task.taskId);
+    delBtn.onclick = () => deleteTask(task.taskId, task.title);
 
     li.appendChild(cb);
     li.appendChild(starBtn);
@@ -644,6 +651,82 @@ async function setStarred(id, starred) {
   await loadTasks();
 }
 
+async function renameTask(id, title) {
+  const res = await fetch(API_URL + "/tasks", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      op: "rename",
+      taskId: id,
+      title
+    })
+  });
+  if (!res.ok) {
+    console.error("renameTask failed", res.status, await res.text());
+    return false;
+  }
+  await loadTasks();
+  return true;
+}
+
+function startTaskTitleEdit(taskId, currentTitle, rowEl) {
+  if (!rowEl || rowEl.querySelector(".task-title-edit")) return;
+
+  const label = rowEl.querySelector(".task-title");
+  if (!label) return;
+
+  const originalTitle = currentTitle || "";
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "task-title-edit";
+  input.value = originalTitle;
+  input.setAttribute("aria-label", "Edit task title");
+
+  let finished = false;
+
+  const restoreLabel = title => {
+    label.textContent = title;
+    if (input.parentElement) input.replaceWith(label);
+  };
+
+  const commitEdit = async () => {
+    if (finished) return;
+    finished = true;
+
+    const nextTitle = input.value.trim();
+    if (!nextTitle || nextTitle === originalTitle) {
+      restoreLabel(originalTitle);
+      return;
+    }
+
+    const ok = await renameTask(taskId, nextTitle);
+    if (!ok) restoreLabel(originalTitle);
+  };
+
+  const cancelEdit = () => {
+    if (finished) return;
+    finished = true;
+    restoreLabel(originalTitle);
+  };
+
+  input.addEventListener("keydown", e => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      commitEdit();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      cancelEdit();
+    }
+  });
+  input.addEventListener("blur", () => commitEdit());
+
+  label.replaceWith(input);
+  input.focus();
+  input.select();
+}
+
 async function addTask() {
   const input = document.getElementById("taskInput");
   const title = input.value.trim();
@@ -680,10 +763,17 @@ document.getElementById("taskInput").addEventListener("keydown", e => {
 
 document.getElementById("taskInput").addEventListener("input", clearAddError);
 
-async function deleteTask(id) {
-  await fetch(API_URL + "/tasks/" + id, {
+async function deleteTask(id, title) {
+  const label = (title || "").trim() || "this task";
+  if (!confirm(`Delete "${label}"?`)) return;
+
+  const res = await fetch(API_URL + "/tasks/" + id, {
     method: "DELETE"
   });
+  if (!res.ok) {
+    console.error("deleteTask failed", res.status, await res.text());
+    return;
+  }
 
   loadTasks();
 }
@@ -865,6 +955,10 @@ document.getElementById("newsFilterChips").addEventListener("click", e => {
   }
   buildNewsFilterChips();
   renderNewsFromCache();
+});
+
+document.getElementById("newsRefresh").addEventListener("click", () => {
+  loadNews();
 });
 
 function renderNewsFromCache() {

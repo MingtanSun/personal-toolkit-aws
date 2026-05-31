@@ -4,7 +4,7 @@ API Gateway + Lambda compatibility (TMDB movies)
 Frontend HTTP usage (app.js)
 ----------------------------
 - GET  /tasks
-- POST /tasks          (body: { title } | { op: "setCompleted", taskId, completed } | { op: "setStarred", taskId, starred })
+- POST /tasks          (body: { title } | { op: "setCompleted", taskId, completed } | { op: "setStarred", taskId, starred } | { op: "rename", taskId, title })
 - DELETE /tasks/{id}
 - GET  /news
 - GET  /movies         (?region=CA&category=now&page=1)
