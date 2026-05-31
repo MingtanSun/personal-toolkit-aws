@@ -161,8 +161,8 @@ a:hover {
 .dashboard-sidebar .card-weather {
   padding: 12px 14px;
   flex: 0 0 auto;
-  max-height: 320px;
-  overflow-y: auto;
+  max-height: none;
+  overflow-y: visible;
   box-shadow: 0 12px 30px rgba(17, 24, 39, 0.12);
   z-index: 2;
 }
@@ -205,8 +205,8 @@ html[data-theme="dark"] .dashboard-sidebar .card-weather {
 }
 
 .dashboard-sidebar .weather-widget-main {
-  margin: 2px 0 8px;
-  min-height: 0;
+  margin: 8px 0 14px;
+  min-height: 96px;
   gap: 8px;
 }
 
@@ -261,9 +261,20 @@ html[data-theme="dark"] .dashboard-sidebar .card-weather {
 }
 
 .dashboard-sidebar .weather-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  align-items: center;
   gap: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
   font-size: 12px;
+}
+
+.dashboard-sidebar .weather-metrics > span {
+  padding: 4px 8px;
+  border: 1px solid var(--border-light);
+  border-radius: 999px;
+  background: var(--hover);
 }
 
 .dashboard-sidebar .weather-footer {
@@ -627,6 +638,59 @@ html[data-theme="dark"] .weather-temp {
   margin-bottom: 8px;
 }
 
+.weather-forecast {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.weather-forecast:empty {
+  display: none;
+}
+
+.weather-forecast-day {
+  padding: 8px 4px;
+  min-width: 0;
+  overflow: hidden;
+  text-align: center;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.weather-forecast-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.weather-forecast-icon {
+  font-size: 22px;
+  line-height: 1.2;
+  margin-bottom: 4px;
+}
+
+.weather-forecast-temps {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.weather-forecast-hi {
+  color: var(--text);
+}
+
+.weather-forecast-lo {
+  font-weight: 500;
+}
+
 .card-weather.is-error .weather-status {
   color: var(--warn);
 }
@@ -730,6 +794,29 @@ html[data-theme="dark"] .weather-temp {
 }
 
 /* Tasks */
+.task-list-error {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--warn);
+  background: rgba(220, 38, 38, 0.06);
+  border: 1px solid rgba(220, 38, 38, 0.15);
+  border-radius: 8px;
+}
+
+.task-list-error[hidden] {
+  display: none !important;
+}
+
+.task-list-loading {
+  padding: 24px 8px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--muted);
+  list-style: none;
+}
+
 .todo-list {
   list-style: none;
   margin: 0;

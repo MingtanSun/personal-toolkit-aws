@@ -205,6 +205,35 @@ function clearAddError() {
   el.hidden = true;
 }
 
+function showTaskListError(msg) {
+  const el = document.getElementById("taskListError");
+  if (!el) return;
+  el.textContent = msg;
+  el.hidden = false;
+}
+
+function clearTaskListError() {
+  const el = document.getElementById("taskListError");
+  if (!el) return;
+  el.textContent = "";
+  el.hidden = true;
+}
+
+function renderTaskListLoading() {
+  const list = document.getElementById("taskList");
+  if (!list) return;
+  list.innerHTML = '<li class="task-list-loading" role="status">Loading tasks…</li>';
+}
+
+async function readApiErrorMessage(res, fallback) {
+  try {
+    const data = await res.json();
+    return (data && (data.message || data.error)) || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 const WEATHER_STORAGE_KEY = "todoApp_weatherCity";
 const DEFAULT_WEATHER_CITY = {
   lat: 43.6532,
@@ -250,6 +279,39 @@ async function searchCities(query) {
   if (!res.ok) throw new Error("City search failed");
   const data = await res.json();
   return Array.isArray(data.results) ? data.results : [];
+}
+
+async function reverseGeocodeLocation(lat, lon) {
+  const ctrl = new AbortController();
+  const timeoutMs = 4500;
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  const params = new URLSearchParams({
+    format: "jsonv2",
+    lat: String(lat),
+    lon: String(lon),
+    zoom: "10",
+    addressdetails: "1"
+  });
+  const res = await fetch(`https://nominatim.openstreetmap.org/reverse?${params}`, {
+    headers: {
+      Accept: "application/json"
+    },
+    signal: ctrl.signal
+  }).finally(() => clearTimeout(t));
+  if (!res.ok) throw new Error("Reverse geocoding failed");
+  const data = await res.json();
+  const addr = data && typeof data.address === "object" ? data.address : {};
+
+  const city = addr.city || addr.town || addr.village || addr.municipality || addr.county || "";
+  const state = addr.state || "";
+  const country = addr.country || "";
+  const label = [city, state, country].filter(Boolean).join(", ");
+  const countryCode = (addr.country_code || "").toUpperCase();
+
+  return {
+    label: label || "Current location",
+    countryCode
+  };
 }
 
 function hideCityResults() {
@@ -363,6 +425,50 @@ function getGeoPosition(ms) {
   });
 }
 
+function formatForecastDayLabel(dateStr, index) {
+  if (index === 0) return "Today";
+  if (index === 1) return "Tomorrow";
+  const d = new Date(dateStr + "T12:00:00");
+  if (Number.isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString(undefined, { weekday: "short" });
+}
+
+function renderWeatherForecast(daily) {
+  const mount = document.getElementById("weatherForecast");
+  if (!mount) return;
+  if (!daily || !Array.isArray(daily.time) || !daily.time.length) {
+    mount.innerHTML = "";
+    return;
+  }
+  const days = daily.time.slice(0, 5);
+  mount.innerHTML = days
+    .map((dateStr, i) => {
+      const code = daily.weather_code?.[i];
+      const max = daily.temperature_2m_max?.[i];
+      const min = daily.temperature_2m_min?.[i];
+      const { icon } = decodeWmo(code);
+      const label = escapeHtml(formatForecastDayLabel(dateStr, i));
+      const hi =
+        max != null && !Number.isNaN(Number(max))
+          ? `${Math.round(Number(max))}°`
+          : "—";
+      const lo =
+        min != null && !Number.isNaN(Number(min))
+          ? `${Math.round(Number(min))}°`
+          : "—";
+      return `
+        <div class="weather-forecast-day">
+          <div class="weather-forecast-label">${label}</div>
+          <div class="weather-forecast-icon" aria-hidden="true">${icon}</div>
+          <div class="weather-forecast-temps">
+            <span class="weather-forecast-hi">${hi}</span>
+            <span class="weather-forecast-lo muted">${lo}</span>
+          </div>
+        </div>`;
+    })
+    .join("");
+}
+
 async function fetchOpenMeteo(lat, lon) {
   const params = new URLSearchParams({
     latitude: String(lat),
@@ -374,6 +480,8 @@ async function fetchOpenMeteo(lat, lon) {
       "weather_code",
       "wind_speed_10m"
     ].join(","),
+    daily: ["weather_code", "temperature_2m_max", "temperature_2m_min"].join(","),
+    forecast_days: "5",
     wind_speed_unit: "kmh",
     timezone: "auto"
   });
@@ -403,6 +511,8 @@ async function loadWeatherForCity(coords) {
     elDetails.textContent = "";
     elLoc.textContent = "";
     elUpdated.textContent = "";
+    const elForecast = document.getElementById("weatherForecast");
+    if (elForecast) elForecast.innerHTML = "";
     return;
   }
 
@@ -416,6 +526,8 @@ async function loadWeatherForCity(coords) {
   elDetails.textContent = "";
   elUpdated.textContent = "";
   elLoc.textContent = coords.label;
+  const elForecastLoading = document.getElementById("weatherForecast");
+  if (elForecastLoading) elForecastLoading.innerHTML = "";
 
   try {
     const data = await fetchOpenMeteo(coords.lat, coords.lon);
@@ -438,6 +550,8 @@ async function loadWeatherForCity(coords) {
     elUpdated.textContent = Number.isNaN(t.getTime())
       ? ""
       : `Updated ${t.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`;
+
+    renderWeatherForecast(data.daily);
   } catch (e) {
     widget.classList.add("is-error");
     elEmoji.textContent = "☁";
@@ -445,6 +559,8 @@ async function loadWeatherForCity(coords) {
     elDesc.textContent = "Could not load weather. Try again.";
     elDetails.textContent = e.message || "";
     elUpdated.textContent = "";
+    const elForecastErr = document.getElementById("weatherForecast");
+    if (elForecastErr) elForecastErr.innerHTML = "";
   } finally {
     btn.disabled = false;
     loadMovies();
@@ -474,7 +590,13 @@ document.getElementById("weatherUseLocation").addEventListener("click", async ()
   hideCityResults();
   try {
     const pos = await getGeoPosition(12000);
-    const loc = { ...pos, label: "Current location" };
+    let place = { label: "Current location", countryCode: "" };
+    try {
+      place = await reverseGeocodeLocation(pos.lat, pos.lon);
+    } catch {
+      /* fallback to generic label while still loading weather by coords */
+    }
+    const loc = { ...pos, label: place.label || "Current location", countryCode: place.countryCode || "" };
     saveWeatherCity(loc);
     await loadWeatherForCity(loc);
   } catch {
@@ -510,17 +632,48 @@ document.getElementById("taskFilterChips").addEventListener("click", e => {
 });
 
 async function loadTasks() {
-  const res = await fetch(API_URL + "/tasks");
-  const data = await res.json();
-
   const list = document.getElementById("taskList");
+  if (!list) return;
   const wrap = list.parentElement;
-  list.innerHTML = "";
+
+  clearTaskListError();
+  renderTaskListLoading();
 
   let emptyEl = wrap.querySelector(".empty-state");
   if (emptyEl) emptyEl.remove();
 
   syncTaskFilterButtons();
+
+  let data;
+  try {
+    const res = await fetch(API_URL + "/tasks");
+    try {
+      data = await res.json();
+    } catch {
+      data = null;
+    }
+    if (!res.ok) {
+      const msg =
+        (data && (data.message || data.error)) ||
+        "Could not load tasks.";
+      showTaskListError(msg);
+      list.innerHTML = "";
+      return;
+    }
+    if (!Array.isArray(data)) {
+      showTaskListError("Unexpected response from tasks API.");
+      list.innerHTML = "";
+      return;
+    }
+  } catch {
+    showTaskListError(
+      "Network error. Check API URL, CORS, and that GET /tasks is configured."
+    );
+    list.innerHTML = "";
+    return;
+  }
+
+  list.innerHTML = "";
 
   if (!data.length) {
     emptyEl = document.createElement("div");
@@ -628,7 +781,9 @@ async function setCompleted(id, completed) {
     })
   });
   if (!res.ok) {
-    console.error("setCompleted failed", res.status, await res.text());
+    const msg = await readApiErrorMessage(res, "Could not update task.");
+    console.error("setCompleted failed", res.status, msg);
+    showTaskListError(msg);
   }
   await loadTasks();
 }
@@ -646,7 +801,9 @@ async function setStarred(id, starred) {
     })
   });
   if (!res.ok) {
-    console.error("setStarred failed", res.status, await res.text());
+    const msg = await readApiErrorMessage(res, "Could not update task.");
+    console.error("setStarred failed", res.status, msg);
+    showTaskListError(msg);
   }
   await loadTasks();
 }
@@ -664,7 +821,9 @@ async function renameTask(id, title) {
     })
   });
   if (!res.ok) {
-    console.error("renameTask failed", res.status, await res.text());
+    const msg = await readApiErrorMessage(res, "Could not rename task.");
+    console.error("renameTask failed", res.status, msg);
+    showTaskListError(msg);
     return false;
   }
   await loadTasks();
@@ -771,7 +930,9 @@ async function deleteTask(id, title) {
     method: "DELETE"
   });
   if (!res.ok) {
-    console.error("deleteTask failed", res.status, await res.text());
+    const msg = await readApiErrorMessage(res, "Could not delete task.");
+    console.error("deleteTask failed", res.status, msg);
+    showTaskListError(msg);
     return;
   }
 
@@ -798,7 +959,6 @@ function fetchWithTimeout(url, ms) {
 }
 
 const CLIENT_NEWS_FEEDS = [
-  { rss: "https://feeds.reuters.com/Reuters/worldNews", source: "Reuters" },
   { rss: "https://rss.nytimes.com/services/xml/rss/nyt/World.xml", source: "The New York Times" },
   { rss: "https://www.theguardian.com/world/rss", source: "The Guardian" },
   { rss: "https://feeds.bbci.co.uk/news/world/rss.xml", source: "BBC News" },

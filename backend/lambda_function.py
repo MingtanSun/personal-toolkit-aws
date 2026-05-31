@@ -69,7 +69,6 @@ _FEED_FETCH_TIMEOUT = 12.0
 _FEED_FETCH_RETRIES = 2
 
 NEWS_FEEDS = (
-    ("https://feeds.reuters.com/Reuters/worldNews", "Reuters"),
     ("https://rss.nytimes.com/services/xml/rss/nyt/World.xml", "The New York Times"),
     ("https://www.theguardian.com/world/rss", "The Guardian"),
     ("https://feeds.bbci.co.uk/news/world/rss.xml", "BBC News"),

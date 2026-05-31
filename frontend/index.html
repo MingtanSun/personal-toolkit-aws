@@ -100,6 +100,7 @@
             <button type="button" class="icon-btn" id="weatherRefresh" title="Refresh" aria-label="Refresh weather">↻</button>
           </div>
           <div class="weather-metrics" id="weatherDetails"></div>
+          <div class="weather-forecast" id="weatherForecast" aria-label="5-day forecast"></div>
           <div class="weather-footer muted">
             <span id="weatherLocation"></span>
             <span id="weatherUpdated"></span>
@@ -134,6 +135,7 @@
           </div>
 
           <div class="task-list-wrap">
+            <p id="taskListError" class="task-list-error" role="alert" hidden></p>
             <ul class="todo-list" id="taskList"></ul>
           </div>
         </section>
