@@ -422,11 +422,36 @@ function getWeatherMoodClass(code) {
   return "weather-cloudy";
 }
 
+function getWeatherFxType(code) {
+  const c = Number(code);
+  if (Number.isNaN(c)) return "none";
+  if (c === 0 || c === 1) return "clear";
+  if ((c >= 51 && c <= 67) || (c >= 80 && c <= 82)) return "rain";
+  if ((c >= 71 && c <= 77) || (c >= 85 && c <= 86)) return "snow";
+  if (c >= 95 && c <= 99) return "storm";
+  return "none";
+}
+
+function getWeatherFxIntensity(code) {
+  const c = Number(code);
+  if (Number.isNaN(c)) return 1;
+  if (c >= 51 && c <= 57) return 0.5;
+  if (c >= 80 && c <= 82) return 1.2;
+  if (c >= 95 && c <= 99) return 1.4;
+  return 1;
+}
+
 function setWeatherMood(widget, code) {
   if (!widget) return;
   widget.classList.remove(...WEATHER_MOOD_CLASSES);
-  if (code == null) return;
+  if (code == null) {
+    if (window.WeatherFx) window.WeatherFx.stop();
+    return;
+  }
   widget.classList.add(getWeatherMoodClass(code));
+  if (window.WeatherFx) {
+    window.WeatherFx.start(getWeatherFxType(code), getWeatherFxIntensity(code));
+  }
 }
 
 function getGeoPosition(ms) {
@@ -543,6 +568,7 @@ async function loadWeatherForCity(coords) {
   }
 
   widget.classList.remove("is-error");
+  if (window.WeatherFx) window.WeatherFx.stop();
   btn.disabled = true;
   elDesc.textContent = "Loading…";
   if (titleEl) {
@@ -1302,6 +1328,7 @@ function applyTheme(theme) {
   } catch {
     /* ignore */
   }
+  if (window.WeatherFx) window.WeatherFx.setTheme(theme);
   syncThemeToggleUi();
 }
 
@@ -1372,6 +1399,12 @@ document.getElementById("themeToggle").addEventListener("click", () => {
 initThemeFromStorage();
 initPointerGlow();
 initCardSpotlight();
+if (window.WeatherFx) {
+  window.WeatherFx.init(
+    document.getElementById("weatherWidget"),
+    document.getElementById("weatherFxCanvas")
+  );
+}
 setHeaderTodayDate();
 loadWeather();
 loadMovies();

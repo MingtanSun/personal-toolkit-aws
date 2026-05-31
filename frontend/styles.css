@@ -192,7 +192,7 @@ a:hover {
   padding: 12px 14px;
   flex: 0 0 auto;
   max-height: none;
-  overflow-y: visible;
+  overflow: hidden;
   box-shadow: 0 12px 30px rgba(17, 24, 39, 0.12);
   z-index: 2;
 }
@@ -782,9 +782,29 @@ html[data-theme="dark"] .weather-temp {
   z-index: 0;
 }
 
-.card-weather > * {
-  position: relative;
+.weather-fx-layer {
+  position: absolute;
+  inset: 0;
   z-index: 1;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.weather-fx-layer canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.card-weather > *:not(.weather-fx-layer) {
+  position: relative;
+  z-index: 2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .weather-fx-layer {
+    display: none;
+  }
 }
 
 .card-weather.weather-clear::after {

@@ -74,6 +74,9 @@
 
       <aside class="dashboard-sidebar" aria-label="Productivity tools">
         <section class="card card-weather" id="weatherWidget" aria-label="Weather">
+          <div class="weather-fx-layer" id="weatherFxLayer" aria-hidden="true">
+            <canvas id="weatherFxCanvas"></canvas>
+          </div>
           <h2 class="card-title" id="weatherCardTitle">Weather</h2>
           <div class="weather-search">
             <input
@@ -143,6 +146,7 @@
     </div>
   </div>
 
+  <script src="weather-fx.js" defer></script>
   <script src="app.js" defer></script>
 </body>
 </html>
