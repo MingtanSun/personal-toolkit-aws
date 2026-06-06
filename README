@@ -1,5 +1,32 @@
-这个项目是一个 serverless 个人 Dashboard
-	•	架构：S3 / API Gateway / Lambda / DynamoDB
-	•	支持功能：任务、新闻、天气、附近餐厅（OpenStreetMap + Overpass）
-	•	Region：Ohio (us-east-2)
-	•	Lambda 环境变量（可选）：OVERPASS_URL、OVERPASS_USER_AGENT
+这个项目是一个 serverless 个人 Dashboard / Personal Toolkit。
+
+核心架构：
+- 前端：S3 静态站点，原生 HTML/CSS/JavaScript
+- 身份：Amazon Cognito User Pool + Hosted UI + OAuth Code with PKCE
+- API：API Gateway HTTP API + Cognito JWT Authorizer
+- 后端：AWS Lambda (Python)
+- 数据：DynamoDB，按 Cognito `sub` 做用户隔离
+- 基础设施：AWS SAM 模板位于 `infra/template.yaml`
+
+当前功能：
+- Cognito 登录 / 登出 / 会话恢复
+- 待办任务：新增、完成、星标、重命名、删除、筛选
+- 国际新闻聚合
+- 本地电影信息（TMDB）
+- 城市天气与 5 天预报（Open-Meteo）
+- 深色 / 浅色主题
+
+重要文件：
+- `APPLICATION_DOCUMENTATION.md`：完整应用文档
+- `AUTHENTICATION.md`：身份系统和安全边界说明
+- `frontend/API_GATEWAY_CHECKLIST.txt`：API Gateway / CORS / Authorizer 检查清单
+- `infra/template.yaml`：Cognito、API Gateway、Lambda、DynamoDB 的 SAM 模板
+
+本地测试：
+
+```text
+python3 -m unittest discover -s tests
+node --check frontend/app.js
+```
+
+部署后需要把 SAM 输出的 `ApiUrl`、`CognitoDomain`、`CognitoClientId`、`AwsRegion` 写入 `frontend/config.js`。

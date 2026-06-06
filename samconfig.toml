@@ -1,0 +1,14 @@
+version = 0.1
+
+[default.deploy.parameters]
+stack_name = "personal-toolkit"
+resolve_s3 = true
+s3_prefix = "personal-toolkit"
+region = "us-east-2"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "StageName=\"prod\" FrontendCallbackUrl=\"http://localhost:8000/\" FrontendLogoutUrl=\"http://localhost:8000/\""
+image_repositories = []
+
+[default.global.parameters]
+region = "us-east-2"

@@ -1,0 +1,193 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Personal Toolkit serverless backend with Cognito authentication.
+
+Parameters:
+  StageName:
+    Type: String
+    Default: prod
+  FrontendCallbackUrl:
+    Type: String
+    Default: http://localhost:8000/
+  FrontendLogoutUrl:
+    Type: String
+    Default: http://localhost:8000/
+  TmdbApiKey:
+    Type: String
+    NoEcho: true
+    Default: ""
+
+Globals:
+  Function:
+    Runtime: python3.13
+    Timeout: 30
+    MemorySize: 256
+    Architectures:
+      - x86_64
+
+Resources:
+  TasksTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UsernameAttributes:
+        - email
+      AutoVerifiedAttributes:
+        - email
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 12
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+          RequireUppercase: true
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+
+  UserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Sub personal-toolkit-${AWS::AccountId}-${AWS::Region}
+      UserPoolId: !Ref UserPool
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref UserPool
+      GenerateSecret: false
+      PreventUserExistenceErrors: ENABLED
+      SupportedIdentityProviders:
+        - COGNITO
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthFlows:
+        - code
+      AllowedOAuthScopes:
+        - email
+        - openid
+        - profile
+      CallbackURLs:
+        - !Ref FrontendCallbackUrl
+      LogoutURLs:
+        - !Ref FrontendLogoutUrl
+      ExplicitAuthFlows:
+        - ALLOW_REFRESH_TOKEN_AUTH
+        - ALLOW_USER_SRP_AUTH
+      AccessTokenValidity: 1
+      IdTokenValidity: 1
+      RefreshTokenValidity: 30
+      TokenValidityUnits:
+        AccessToken: hours
+        IdToken: hours
+        RefreshToken: days
+
+  DashboardApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: !Ref StageName
+      CorsConfiguration:
+        AllowOrigins:
+          - "*"
+        AllowHeaders:
+          - content-type
+          - authorization
+        AllowMethods:
+          - GET
+          - POST
+          - PATCH
+          - DELETE
+          - OPTIONS
+      Auth:
+        DefaultAuthorizer: CognitoJwtAuthorizer
+        Authorizers:
+          CognitoJwtAuthorizer:
+            IdentitySource: "$request.header.Authorization"
+            JwtConfiguration:
+              issuer: !Sub https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}
+              audience:
+                - !Ref UserPoolClient
+
+  DashboardFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../backend/
+      Handler: lambda_function.lambda_handler
+      Environment:
+        Variables:
+          TASKS_TABLE_NAME: !Ref TasksTable
+          TMDB_API_KEY: !Ref TmdbApiKey
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TasksTable
+      Events:
+        GetTasks:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref DashboardApi
+            Path: /tasks
+            Method: GET
+        PostTasks:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref DashboardApi
+            Path: /tasks
+            Method: POST
+        PatchTask:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref DashboardApi
+            Path: /tasks/{id}
+            Method: PATCH
+        DeleteTask:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref DashboardApi
+            Path: /tasks/{id}
+            Method: DELETE
+        GetNews:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref DashboardApi
+            Path: /news
+            Method: GET
+        GetMovies:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref DashboardApi
+            Path: /movies
+            Method: GET
+
+Outputs:
+  ApiUrl:
+    Description: HTTP API endpoint URL.
+    Value: !Sub https://${DashboardApi}.execute-api.${AWS::Region}.amazonaws.com/${StageName}
+  AwsRegion:
+    Description: AWS Region for frontend config.
+    Value: !Ref AWS::Region
+  CognitoUserPoolId:
+    Description: Cognito User Pool ID.
+    Value: !Ref UserPool
+  CognitoClientId:
+    Description: Cognito SPA App Client ID.
+    Value: !Ref UserPoolClient
+  CognitoDomain:
+    Description: Cognito Hosted UI domain.
+    Value: !Sub https://${UserPoolDomain}.auth.${AWS::Region}.amazoncognito.com
+  TasksTableName:
+    Description: DynamoDB task table name.
+    Value: !Ref TasksTable

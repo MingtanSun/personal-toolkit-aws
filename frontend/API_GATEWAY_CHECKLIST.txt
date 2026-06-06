@@ -1,13 +1,15 @@
-API Gateway + Lambda compatibility (TMDB movies)
-===============================================
+API Gateway + Lambda compatibility (Cognito protected dashboard)
+===============================================================
 
 Frontend HTTP usage (app.js)
 ----------------------------
-- GET  /tasks
-- POST /tasks          (body: { title } | { op: "setCompleted", taskId, completed } | { op: "setStarred", taskId, starred } | { op: "rename", taskId, title })
-- DELETE /tasks/{id}
-- GET  /news
-- GET  /movies         (?region=CA&category=now&page=1)
+- GET  /tasks                         Authorization: Bearer <Cognito access token>
+- POST /tasks                         Authorization: Bearer <Cognito access token>
+  body: { title } | { op: "setCompleted", taskId, completed } | { op: "setStarred", taskId, starred } | { op: "rename", taskId, title }
+- DELETE /tasks/{id}                  Authorization: Bearer <Cognito access token>
+- GET  /news                          Authorization: Bearer <Cognito access token>
+- GET  /movies (?region=CA&category=now&page=1)
+                                       Authorization: Bearer <Cognito access token>
 
 Not used by the SPA today
 --------------------------
@@ -15,7 +17,9 @@ Not used by the SPA today
 
 Required routes (HTTP API or REST)
 ----------------------------------
-1. ANY /{proxy+} or per-route:
+1. Recommended: deploy infra/template.yaml with AWS SAM.
+
+2. Manual equivalent, if not using SAM:
    - GET    /tasks
    - POST   /tasks
    - DELETE /tasks/{id}
@@ -23,12 +27,19 @@ Required routes (HTTP API or REST)
    - GET    /news
    - GET    /movies
 
-2. OPTIONS (preflight)
+3. Cognito authorizer
+   - Configure a Cognito/JWT authorizer using the User Pool issuer.
+   - Use the SPA App Client ID as the audience.
+   - Apply the authorizer to all routes above.
+   - Do not require auth for OPTIONS preflight.
+
+4. OPTIONS (preflight)
    - Either enable CORS in API Gateway for these routes, OR
    - Route OPTIONS to the same Lambda (Lambda returns 204 + Allow-Methods / Allow-Headers).
 
 Lambda environment variables
 ----------------------------
+- TASKS_TABLE_NAME       — DynamoDB table with PK/SK keys; default TodoTable
 - TMDB_API_KEY           — required for GET /movies
 - TMDB_BASE_URL          — optional, default https://api.themoviedb.org/3
 - TMDB_IMAGE_BASE_URL    — optional, default https://image.tmdb.org/t/p/w342
@@ -44,8 +55,15 @@ All JSON responses include:
 
 OPTIONS responses add:
   Access-Control-Allow-Methods: GET,POST,PATCH,DELETE,OPTIONS
-  Access-Control-Allow-Headers: content-type
+  Access-Control-Allow-Headers: content-type,authorization
+
+DynamoDB key schema
+-------------------
+- Partition key: PK (S), value USER#{cognitoSub}
+- Sort key:      SK (S), value TASK#{taskId}
+- Lambda must read the user ID from JWT claims, never from request body.
 
 S3 static hosting
 -----------------
-Upload together: index.html, styles.css, app.js (same folder; relative URLs).
+Upload together: index.html, styles.css, config.js, app.js, weather-fx.js, icon.png.
+Set config.js values from SAM outputs: ApiUrl, CognitoDomain, CognitoClientId, AwsRegion.

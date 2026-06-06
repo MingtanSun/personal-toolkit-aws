@@ -24,10 +24,35 @@
         <h1 class="dashboard-title">Personal Toolkit</h1>
         <p class="dashboard-date" id="dashboardDate"></p>
       </div>
-      <button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle theme">☾</button>
+      <div class="header-actions">
+        <div class="auth-status" id="authStatus" role="status">
+          <span class="auth-user" id="authUser">Signed out</span>
+          <button type="button" class="btn-secondary auth-btn" id="authSignIn">Sign in</button>
+          <button type="button" class="btn-secondary auth-btn" id="authSignOut" hidden>Sign out</button>
+        </div>
+        <button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle theme">☾</button>
+      </div>
     </header>
 
-    <div class="dashboard-content">
+    <section class="auth-panel card" id="authPanel" aria-labelledby="authPanelTitle">
+      <p class="auth-eyebrow">Personal AWS Dashboard</p>
+      <h2 class="auth-title" id="authPanelTitle">Sign in to your toolkit</h2>
+      <p class="auth-copy">
+        Access your private tasks, weather, world news, and local movies from a
+        Cognito-protected dashboard backed by API Gateway, Lambda, and DynamoDB.
+      </p>
+      <ul class="auth-feature-list" aria-label="Application highlights">
+        <li>Private tasks isolated per account</li>
+        <li>JWT-secured API access</li>
+        <li>Serverless AWS deployment</li>
+      </ul>
+      <p class="auth-error" id="authError" role="alert" hidden></p>
+      <button type="button" class="btn-secondary auth-primary-btn" id="authPanelSignIn">
+        Sign in securely
+      </button>
+    </section>
+
+    <div class="dashboard-content" id="dashboardContent" hidden>
       <main class="dashboard-main" aria-label="Main content">
         <section class="card card-news" aria-labelledby="newsHeading">
           <div class="card-title-row">
@@ -146,6 +171,7 @@
     </div>
   </div>
 
+  <script src="config.js"></script>
   <script src="weather-fx.js" defer></script>
   <script src="app.js" defer></script>
 </body>

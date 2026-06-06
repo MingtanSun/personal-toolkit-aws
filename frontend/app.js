@@ -1,7 +1,20 @@
-const API_URL = "https://6dc9v9n7sa.execute-api.us-east-2.amazonaws.com";
+const APP_CONFIG = window.APP_CONFIG || {};
+const API_URL = (APP_CONFIG.API_URL || "https://6dc9v9n7sa.execute-api.us-east-2.amazonaws.com").replace(/\/$/, "");
+const AUTH_STORAGE_KEY = "todoApp_authTokens";
+const AUTH_PKCE_KEY = "todoApp_pkce";
+const AUTH_STATE_KEY = "todoApp_oauthState";
+const COGNITO_DOMAIN = (APP_CONFIG.COGNITO_DOMAIN || "").replace(/\/$/, "");
+const COGNITO_CLIENT_ID = APP_CONFIG.COGNITO_CLIENT_ID || "";
+const COGNITO_REDIRECT_URI = APP_CONFIG.COGNITO_REDIRECT_URI || window.location.origin + window.location.pathname;
+const COGNITO_LOGOUT_URI = APP_CONFIG.COGNITO_LOGOUT_URI || window.location.origin + window.location.pathname;
+const COGNITO_SCOPES = Array.isArray(APP_CONFIG.COGNITO_SCOPES)
+  ? APP_CONFIG.COGNITO_SCOPES
+  : ["openid", "email", "profile"];
+const authConfigured = Boolean(COGNITO_DOMAIN && COGNITO_CLIENT_ID);
 
 const TASK_FILTER_KEY = "todoApp_taskFilter";
 const THEME_KEY = "todoApp_theme";
+let authState = { tokens: null, claims: null };
 
 let taskFilter = "all";
 try {
@@ -18,6 +31,251 @@ let lastMoviesRegion = null;
 let moviesLoading = false;
 const moviePages = { now: 1, upcoming: 1 };
 const moviePageCache = new Map();
+
+function base64UrlEncode(bytes) {
+  const raw = btoa(String.fromCharCode(...new Uint8Array(bytes)));
+  return raw.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function randomBase64Url(byteLength = 32) {
+  const bytes = new Uint8Array(byteLength);
+  crypto.getRandomValues(bytes);
+  return base64UrlEncode(bytes);
+}
+
+async function sha256Base64Url(value) {
+  const data = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return base64UrlEncode(digest);
+}
+
+function decodeJwtPayload(token) {
+  try {
+    const part = token.split(".")[1];
+    if (!part) return null;
+    const normalized = part.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), "=");
+    return JSON.parse(atob(padded));
+  } catch {
+    return null;
+  }
+}
+
+function tokenExpired(claims, skewSeconds = 60) {
+  if (!claims || typeof claims.exp !== "number") return true;
+  return claims.exp <= Math.floor(Date.now() / 1000) + skewSeconds;
+}
+
+function saveAuth(tokens) {
+  authState.tokens = tokens;
+  authState.claims = decodeJwtPayload(tokens.id_token || tokens.access_token || "");
+  sessionStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(tokens));
+}
+
+function loadStoredAuth() {
+  try {
+    const raw = sessionStorage.getItem(AUTH_STORAGE_KEY);
+    if (!raw) return false;
+    const tokens = JSON.parse(raw);
+    if (!tokens || !tokens.access_token) return false;
+    authState.tokens = tokens;
+    authState.claims = decodeJwtPayload(tokens.id_token || tokens.access_token);
+    return !tokenExpired(decodeJwtPayload(tokens.access_token), 0);
+  } catch {
+    return false;
+  }
+}
+
+function clearAuth() {
+  authState = { tokens: null, claims: null };
+  sessionStorage.removeItem(AUTH_STORAGE_KEY);
+  sessionStorage.removeItem(AUTH_PKCE_KEY);
+  sessionStorage.removeItem(AUTH_STATE_KEY);
+}
+
+function showAuthError(msg) {
+  const el = document.getElementById("authError");
+  if (!el) return;
+  el.textContent = msg;
+  el.hidden = false;
+}
+
+function clearAuthError() {
+  const el = document.getElementById("authError");
+  if (!el) return;
+  el.textContent = "";
+  el.hidden = true;
+}
+
+function renderSignedOut(message) {
+  const panel = document.getElementById("authPanel");
+  const content = document.getElementById("dashboardContent");
+  const userEl = document.getElementById("authUser");
+  const signInBtn = document.getElementById("authSignIn");
+  const signOutBtn = document.getElementById("authSignOut");
+  if (panel) panel.hidden = false;
+  if (content) content.hidden = true;
+  if (userEl) userEl.textContent = authConfigured ? "Signed out" : "Auth not configured";
+  if (signInBtn) signInBtn.hidden = false;
+  if (signOutBtn) signOutBtn.hidden = true;
+  if (!authConfigured) {
+    showAuthError("Cognito is not configured. Fill frontend/config.js with Cognito domain and client ID.");
+  } else if (message) {
+    showAuthError(message);
+  }
+}
+
+function renderSignedIn() {
+  const panel = document.getElementById("authPanel");
+  const content = document.getElementById("dashboardContent");
+  const userEl = document.getElementById("authUser");
+  const signInBtn = document.getElementById("authSignIn");
+  const signOutBtn = document.getElementById("authSignOut");
+  const claims = authState.claims || {};
+  if (panel) panel.hidden = true;
+  if (content) content.hidden = false;
+  if (userEl) userEl.textContent = claims.email || claims["cognito:username"] || "Signed in";
+  if (signInBtn) signInBtn.hidden = true;
+  if (signOutBtn) signOutBtn.hidden = false;
+  clearAuthError();
+}
+
+async function beginSignIn() {
+  clearAuthError();
+  if (!authConfigured) {
+    renderSignedOut();
+    return;
+  }
+  const verifier = randomBase64Url(64);
+  const challenge = await sha256Base64Url(verifier);
+  const state = randomBase64Url(24);
+  sessionStorage.setItem(AUTH_PKCE_KEY, verifier);
+  sessionStorage.setItem(AUTH_STATE_KEY, state);
+  const params = new URLSearchParams({
+    response_type: "code",
+    client_id: COGNITO_CLIENT_ID,
+    redirect_uri: COGNITO_REDIRECT_URI,
+    scope: COGNITO_SCOPES.join(" "),
+    state,
+    code_challenge: challenge,
+    code_challenge_method: "S256"
+  });
+  window.location.assign(`${COGNITO_DOMAIN}/oauth2/authorize?${params}`);
+}
+
+async function exchangeToken(params) {
+  const res = await fetch(`${COGNITO_DOMAIN}/oauth2/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: params
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.error_description || data.error || "Token exchange failed");
+  }
+  return data;
+}
+
+async function completeAuthRedirect() {
+  if (!authConfigured) return false;
+  const url = new URL(window.location.href);
+  const code = url.searchParams.get("code");
+  const state = url.searchParams.get("state");
+  const error = url.searchParams.get("error");
+  if (error) {
+    showAuthError(url.searchParams.get("error_description") || error);
+    return false;
+  }
+  if (!code) return false;
+
+  const expectedState = sessionStorage.getItem(AUTH_STATE_KEY);
+  const verifier = sessionStorage.getItem(AUTH_PKCE_KEY);
+  if (!expectedState || expectedState !== state || !verifier) {
+    clearAuth();
+    showAuthError("Could not verify the sign-in response. Please try again.");
+    return false;
+  }
+
+  const body = new URLSearchParams({
+    grant_type: "authorization_code",
+    client_id: COGNITO_CLIENT_ID,
+    code,
+    redirect_uri: COGNITO_REDIRECT_URI,
+    code_verifier: verifier
+  });
+  const tokens = await exchangeToken(body);
+  saveAuth(tokens);
+  sessionStorage.removeItem(AUTH_PKCE_KEY);
+  sessionStorage.removeItem(AUTH_STATE_KEY);
+  url.searchParams.delete("code");
+  url.searchParams.delete("state");
+  history.replaceState({}, document.title, url.pathname + url.search + url.hash);
+  return true;
+}
+
+async function refreshTokens() {
+  if (!authConfigured || !authState.tokens?.refresh_token) return false;
+  const body = new URLSearchParams({
+    grant_type: "refresh_token",
+    client_id: COGNITO_CLIENT_ID,
+    refresh_token: authState.tokens.refresh_token
+  });
+  const next = await exchangeToken(body);
+  saveAuth({ ...authState.tokens, ...next });
+  return true;
+}
+
+async function getAccessToken() {
+  if (!authState.tokens && !loadStoredAuth()) return null;
+  const accessClaims = decodeJwtPayload(authState.tokens.access_token);
+  if (!tokenExpired(accessClaims)) return authState.tokens.access_token;
+  try {
+    const refreshed = await refreshTokens();
+    return refreshed ? authState.tokens.access_token : null;
+  } catch {
+    clearAuth();
+    renderSignedOut("Your session expired. Please sign in again.");
+    return null;
+  }
+}
+
+async function authenticatedFetch(url, options = {}) {
+  const token = await getAccessToken();
+  if (!token) {
+    renderSignedOut("Sign in to continue.");
+    throw new Error("Authentication required");
+  }
+  const headers = new Headers(options.headers || {});
+  headers.set("Authorization", `Bearer ${token}`);
+  const res = await fetch(url, { ...options, headers });
+  if (res.status === 401 || res.status === 403) {
+    clearAuth();
+    renderSignedOut("Your session is no longer valid. Please sign in again.");
+  }
+  return res;
+}
+
+function apiFetch(path, options) {
+  return authenticatedFetch(`${API_URL}${path}`, options);
+}
+
+function authenticatedFetchWithTimeout(url, ms) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  return authenticatedFetch(url, { signal: ctrl.signal }).finally(() => clearTimeout(t));
+}
+
+function signOut() {
+  clearAuth();
+  renderSignedOut();
+  if (authConfigured) {
+    const params = new URLSearchParams({
+      client_id: COGNITO_CLIENT_ID,
+      logout_uri: COGNITO_LOGOUT_URI
+    });
+    window.location.assign(`${COGNITO_DOMAIN}/logout?${params}`);
+  }
+}
 
 function escapeHtml(s) {
   return String(s)
@@ -144,7 +402,7 @@ async function loadMovies(options = {}) {
       category: moviesTab,
       page: String(page)
     });
-    const res = await fetch(`${API_URL}/movies?${params}`);
+    const res = await apiFetch(`/movies?${params}`);
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       const msg = data.message || data.error || "Could not load movies.";
@@ -617,7 +875,7 @@ async function loadWeatherForCity(coords) {
     if (elForecastErr) elForecastErr.innerHTML = "";
   } finally {
     btn.disabled = false;
-    loadMovies();
+    if (authState.tokens) loadMovies();
   }
 }
 
@@ -700,7 +958,7 @@ async function loadTasks() {
 
   let data;
   try {
-    const res = await fetch(API_URL + "/tasks");
+    const res = await apiFetch("/tasks");
     try {
       data = await res.json();
     } catch {
@@ -823,7 +1081,7 @@ async function loadTasks() {
 }
 
 async function setCompleted(id, completed) {
-  const res = await fetch(API_URL + "/tasks", {
+  const res = await apiFetch("/tasks", {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
@@ -843,7 +1101,7 @@ async function setCompleted(id, completed) {
 }
 
 async function setStarred(id, starred) {
-  const res = await fetch(API_URL + "/tasks", {
+  const res = await apiFetch("/tasks", {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
@@ -863,7 +1121,7 @@ async function setStarred(id, starred) {
 }
 
 async function renameTask(id, title) {
-  const res = await fetch(API_URL + "/tasks", {
+  const res = await apiFetch("/tasks", {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
@@ -946,7 +1204,7 @@ async function addTask() {
   clearAddError();
   if (!title) return;
 
-  const res = await fetch(API_URL + "/tasks", {
+  const res = await apiFetch("/tasks", {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
@@ -980,7 +1238,7 @@ async function deleteTask(id, title) {
   const label = (title || "").trim() || "this task";
   if (!confirm(`Delete "${label}"?`)) return;
 
-  const res = await fetch(API_URL + "/tasks/" + id, {
+  const res = await apiFetch("/tasks/" + id, {
     method: "DELETE"
   });
   if (!res.ok) {
@@ -1235,7 +1493,7 @@ function renderNewsList(listEl, items) {
 
 async function fetchNewsItemsFromApi() {
   const once = async () => {
-    const res = await fetchWithTimeout(API_URL + "/news", 26000);
+    const res = await authenticatedFetchWithTimeout(API_URL + "/news", 26000);
     let data = {};
     try {
       data = await res.json();
@@ -1396,6 +1654,34 @@ document.getElementById("themeToggle").addEventListener("click", () => {
   applyTheme(next);
 });
 
+document.getElementById("authSignIn").addEventListener("click", () => beginSignIn());
+document.getElementById("authPanelSignIn").addEventListener("click", () => beginSignIn());
+document.getElementById("authSignOut").addEventListener("click", () => signOut());
+
+async function bootstrapAuthenticatedApp() {
+  try {
+    await completeAuthRedirect();
+  } catch (e) {
+    clearAuth();
+    showAuthError(e.message || "Sign-in failed. Please try again.");
+  }
+
+  if (!authState.tokens) loadStoredAuth();
+
+  if (!authConfigured || !authState.tokens) {
+    renderSignedOut();
+    return;
+  }
+
+  const token = await getAccessToken();
+  if (!token) return;
+
+  renderSignedIn();
+  loadMovies();
+  loadTasks();
+  loadNews();
+}
+
 initThemeFromStorage();
 initPointerGlow();
 initCardSpotlight();
@@ -1407,6 +1693,4 @@ if (window.WeatherFx) {
 }
 setHeaderTodayDate();
 loadWeather();
-loadMovies();
-loadTasks();
-loadNews();
+bootstrapAuthenticatedApp();
