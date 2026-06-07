@@ -4,7 +4,33 @@
 
 Personal Toolkit 是一个基于 Serverless 架构的个人仪表盘应用，用于在同一个页面集中查看日常信息和处理轻量任务。应用当前提供 Cognito 登录、待办事项、天气预报、国际新闻和本地电影信息等核心能力，适合部署为个人主页或私人效率面板。
 
-项目采用静态前端 + AWS 后端的方式实现：前端页面托管在 S3 等静态站点服务上，用户通过 Amazon Cognito Hosted UI 登录，前端携带 JWT 调用 API Gateway，后端通过 Lambda 处理业务，任务数据按 Cognito 用户 ID 隔离存储在 DynamoDB 中。新闻与电影数据由 Lambda 聚合外部服务后返回，天气数据由浏览器端直接调用 Open-Meteo 等公开接口获取。
+项目采用静态前端 + AWS 后端的方式实现：前端页面托管在 S3 等静态站点服务上，用户通过 Amazon Cognito Hosted UI 登录，前端携带 JWT 调用 API Gateway HTTP API，后端通过单个 Lambda 函数处理业务，任务数据按 Cognito 用户 ID 隔离存储在 DynamoDB 中。新闻与电影数据由 Lambda 聚合外部服务后返回，天气数据由浏览器端直接调用 Open-Meteo 等公开接口获取。
+
+### 1.1 项目结构
+
+```text
+todo_aws/
+├── frontend/                 # 静态 SPA（无构建步骤）
+│   ├── index.html
+│   ├── app.js
+│   ├── styles.css
+│   ├── weather-fx.js
+│   ├── config.js             # 部署环境配置（不入库敏感信息时可 gitignore）
+│   └── config.example.js     # 配置模板
+├── backend/
+│   └── lambda_function.py    # 单 Lambda 多路由
+├── infra/
+│   └── template.yaml         # AWS SAM 基础设施模板
+├── tests/                    # 本地单元测试
+├── archive/                  # 历史设计与已合并文档（见 archive/README.md）
+├── samconfig.toml            # SAM 部署默认参数
+├── README                    # 项目快速说明
+└── APPLICATION_DOCUMENTATION.md   # 完整应用文档（主文档）
+```
+
+### 1.2 归档文档
+
+早期拆分出的专题文档与历史设计已移至 `archive/`，索引见 [`archive/README.md`](archive/README.md)。日常开发以本文档为准，无需再维护多份重复说明。
 
 ## 2. 当前功能
 
@@ -19,7 +45,13 @@ Personal Toolkit 是一个基于 Serverless 架构的个人仪表盘应用，用
 - token 刷新：access token 过期前使用 refresh token 换取新 token。
 - API 鉴权：调用 `/tasks`、`/news`、`/movies` 时自动附带 `Authorization: Bearer <token>`。
 - 后端信任边界：Lambda 只从 API Gateway authorizer 注入的 JWT claims 中读取 Cognito `sub`，不信任前端请求体传入的用户信息。
-- 未登录状态：仪表盘主体隐藏，用户需要登录后才能加载受保护数据。
+- 未登录状态：仪表盘主体隐藏，显示登录引导面板（`authPanel`）；页眉显示 “Signed out” 与 Sign in 按钮。
+- 已登录状态：页眉显示 Cognito JWT 中的 `email` 或 `cognito:username`，仪表盘内容区可见。
+- 配置缺失：若 `config.js` 未填写 `COGNITO_DOMAIN` / `COGNITO_CLIENT_ID`，页面提示 “Auth not configured”。
+- OAuth 回调：登录成功后浏览器回调带 `code` 与 `state` 参数，前端校验 state、用 PKCE verifier 换 token，随后清理 URL 查询参数。
+- SAM 默认 token 有效期：Access Token / ID Token 各 1 小时，Refresh Token 30 天（见 `infra/template.yaml`）。
+
+受保护数据（任务、新闻、电影）仅在登录后通过 `bootstrapAuthenticatedApp()` 加载；天气模块在页面初始化时即加载，不依赖登录状态。
 
 ### 2.2 待办事项
 
@@ -35,6 +67,7 @@ Personal Toolkit 是一个基于 Serverless 架构的个人仪表盘应用，用
 - 删除任务：点击删除按钮后经过确认再删除。
 - 任务筛选：支持 `All`、`Active`、`Starred` 三种视图。
 - 本地偏好保存：当前任务筛选状态保存在浏览器 `localStorage` 中。
+- 列表排序：前端将星标任务置顶显示；后端 `GET /tasks` 按 `createdAt` 升序返回。
 
 ### 2.3 天气
 
@@ -61,7 +94,17 @@ Personal Toolkit 是一个基于 Serverless 架构的个人仪表盘应用，用
 - 展示新闻来源和发布时间。
 - 点击新闻条目跳转到原始媒体页面。
 - 根据新闻来源生成筛选按钮，可按来源过滤新闻。
-- 当后端 `/news` 接口不可用或返回空列表时，前端会尝试通过 RSS 代理进行客户端兜底加载。
+- 当后端 `/news` 接口不可用或返回空列表时，前端会尝试通过 RSS 代理进行客户端兜底加载，并显示 “RSS mirror” 提示。
+- 后端并行抓取各 RSS 源（线程池），每源最多 7 条，合并去重后按发布时间倒序，最多返回 22 条。
+- 后端 `/news` 设计为始终返回 HTTP 200；抓取失败或结果为空时在响应中带 `degraded: true` 与 `error` 字段，前端据此触发兜底。
+- 前端 API 请求失败时会重试一次（间隔约 800ms），再进入客户端兜底。
+- 后端 `NEWS_FEEDS` 与前端 `CLIENT_NEWS_FEEDS` 需保持来源一致。
+
+客户端 RSS 兜底使用的代理服务（按顺序尝试）：
+
+- `api.allorigins.win`
+- `corsproxy.io`
+- `r.jina.ai`
 
 当前聚合来源包括：
 
@@ -98,6 +141,8 @@ Personal Toolkit 是一个基于 Serverless 架构的个人仪表盘应用，用
 - 卡片支持鼠标悬停高光效果。
 - 遵循 `prefers-reduced-motion`，在用户要求减少动画时关闭部分动效。
 - 布局采用桌面仪表盘风格：新闻和电影位于主内容区，天气和待办位于侧边栏。
+- 指针高光与卡片聚光灯：鼠标移动时在卡片上产生轻微高光效果（`initPointerGlow` / `initCardSpotlight`）。
+- 无障碍：主要交互控件带 `aria-*` 标签；新闻来源筛选、电影分类使用 tab/chip 模式。
 
 ## 3. 技术架构
 
@@ -108,9 +153,9 @@ Browser
   ├─ Static frontend: index.html / styles.css / config.js / app.js / weather-fx.js
   ├─ Cognito Hosted UI: OAuth Code + PKCE login
   ├─ Direct external APIs: Open-Meteo, OpenStreetMap Nominatim, RSS fallback proxies
-  └─ API Gateway
-       ├─ Cognito JWT Authorizer
-       └─ AWS Lambda
+  └─ API Gateway HTTP API
+       ├─ Cognito JWT Authorizer（默认，除 OPTIONS 外全部路由）
+       └─ AWS Lambda (DashboardFunction, Python 3.13)
             ├─ DynamoDB: user-partitioned tasks
             ├─ RSS news feeds
             └─ TMDB API
@@ -135,12 +180,18 @@ Browser
 ```js
 window.APP_CONFIG = {
   API_URL: "https://your-api-id.execute-api.us-east-2.amazonaws.com/prod",
+  AWS_REGION: "us-east-2",
   COGNITO_DOMAIN: "https://your-domain.auth.us-east-2.amazoncognito.com",
-  COGNITO_CLIENT_ID: "your-cognito-app-client-id"
+  COGNITO_CLIENT_ID: "your-cognito-app-client-id",
+  COGNITO_REDIRECT_URI: window.location.origin + window.location.pathname,
+  COGNITO_LOGOUT_URI: window.location.origin + window.location.pathname,
+  COGNITO_SCOPES: ["openid", "email", "profile"]
 };
 ```
 
 如果 API Gateway 或 Cognito 资源变化，只需要更新 `frontend/config.js`。
+
+页面脚本加载顺序：`config.js` → `weather-fx.js`（defer）→ `app.js`（defer）。`config.js` 必须在 `app.js` 之前加载，以便读取 `window.APP_CONFIG`。
 
 ### 3.3 后端
 
@@ -153,6 +204,8 @@ window.APP_CONFIG = {
 - 从多个 RSS 源抓取并合并新闻标题。
 - 代理 TMDB 电影接口，并规范化返回字段。
 - 返回 CORS 响应头，方便浏览器调用。
+- 路由分发：`lambda_handler` 根据 HTTP method 与 path 分发；若 API Gateway 带 stage 前缀（如 `/prod/tasks`），会自动剥离 stage 再匹配。
+- 鉴权：`require_user(event)` 从 `requestContext.authorizer.jwt.claims`（HTTP API）或 `authorizer.claims`（REST 兼容形态）读取 `sub`；缺失时返回 401。
 
 ### 3.4 数据存储
 
@@ -175,6 +228,32 @@ window.APP_CONFIG = {
 
 天气城市、主题和筛选偏好存储在浏览器 `localStorage` 中，不进入后端数据库。
 
+### 3.5 基础设施（AWS SAM）
+
+`infra/template.yaml` 通过 AWS SAM 一键部署以下资源：
+
+| 资源 | 说明 |
+|------|------|
+| `TasksTable` | DynamoDB 表，`PK`/`SK` 复合键，按需计费（PAY_PER_REQUEST） |
+| `UserPool` | Cognito 用户池，邮箱登录，密码策略最低 12 位 |
+| `UserPoolDomain` | Hosted UI 域名，格式 `personal-toolkit-{AccountId}-{Region}` |
+| `UserPoolClient` | SPA 客户端（无 client secret），OAuth code flow，支持 refresh token |
+| `DashboardApi` | API Gateway HTTP API，默认 Cognito JWT Authorizer |
+| `DashboardFunction` | Python 3.13 Lambda，256 MB，30s 超时，绑定全部 API 路由 |
+
+SAM 部署参数：
+
+- `StageName`：API 阶段名，默认 `prod`。
+- `FrontendCallbackUrl` / `FrontendLogoutUrl`：Cognito OAuth 回调与登出 URL，须与前端实际访问 URL 完全一致。
+- `TmdbApiKey`：TMDB API Key（NoEcho）。
+
+SAM 输出（需写入 `frontend/config.js`）：
+
+- `ApiUrl`、`AwsRegion`、`CognitoDomain`、`CognitoClientId`
+- 另含 `CognitoUserPoolId`、`TasksTableName`（运维参考）
+
+仓库根目录 `samconfig.toml` 保存默认 stack 名（`personal-toolkit`）、区域（`us-east-2`）等部署参数，可通过 `sam deploy --guided` 覆盖。
+
 ## 4. API 说明
 
 所有后端 API 均要求 Cognito JWT：
@@ -184,6 +263,17 @@ Authorization: Bearer <access_token>
 ```
 
 缺少或无效 token 时返回 `401 unauthorized`。
+
+通用错误响应格式：
+
+```json
+{
+  "error": "error_code",
+  "message": "Human-readable description"
+}
+```
+
+常见 `error` 值：`unauthorized`、`invalid_request`、`invalid_json`、`task_not_found`、`not_found`、`tmdb_key_missing`、`tmdb_auth_failed`、`tmdb_fetch_failed`。
 
 ### 4.1 任务接口
 
@@ -277,7 +367,19 @@ Authorization: Bearer <access_token>
 }
 ```
 
-接口设计为尽量返回 HTTP 200。当 RSS 抓取失败时，返回空 `items`，前端再尝试客户端兜底。
+接口设计为始终返回 HTTP 200。当 RSS 抓取失败或结果为空时，返回空 `items` 并附带降级标记，前端再尝试客户端兜底。
+
+降级响应示例：
+
+```json
+{
+  "items": [],
+  "degraded": true,
+  "error": "no_items"
+}
+```
+
+`error` 还可能为 `news_fetch_failed`。
 
 ### 4.3 电影接口
 
@@ -288,7 +390,7 @@ Authorization: Bearer <access_token>
 查询参数：
 
 - `region`：两位国家或地区代码，例如 `CA`、`US`。
-- `category`：电影分类，支持 `now` 和 `upcoming`。
+- `category`：电影分类，支持 `now`（别名 `now_playing`、`playing`）和 `upcoming`（别名 `coming`、`coming_soon`）。
 - `page`：页码，最小为 `1`，最大限制为 `500`。
 
 请求示例：
@@ -377,7 +479,31 @@ window.APP_CONFIG = {
 - `TMDB_BASE_URL`：可选，默认 `https://api.themoviedb.org/3`。
 - `TMDB_IMAGE_BASE_URL`：可选，默认 `https://image.tmdb.org/t/p/w342`。
 
-历史 README 中提到的 `OVERPASS_URL`、`OVERPASS_USER_AGENT` 与附近餐厅功能相关，但当前活动代码中没有启用餐厅模块。
+历史 README 中提到的 `OVERPASS_URL`、`OVERPASS_USER_AGENT` 与附近餐厅功能相关，但当前活动代码中没有启用餐厅模块；相关设计归档在 `archive/restaurant-overpass-plan.md`。
+
+### 6.3 本地开发与测试
+
+无需 AWS 凭证即可运行以下本地校验：
+
+```text
+python3 -m unittest discover -s tests
+python3 -m py_compile backend/lambda_function.py tests/test_lambda_auth.py tests/test_frontend_auth.py
+node --check frontend/app.js
+sam validate --template-file infra/template.yaml   # 需安装 SAM CLI
+```
+
+测试覆盖要点：
+
+- Lambda：无 JWT 返回 401；创建任务写入 `USER#{sub}`；用户 A 无法修改用户 B 的任务。
+- 前端：`config.js` 在 `app.js` 之前加载；存在 PKCE OAuth 流程；后端 API 调用统一经 `apiFetch` / `authenticatedFetch`，不裸调 `fetch(API_URL + ...)`。
+
+本地预览静态前端（示例）：
+
+```text
+cd frontend && python3 -m http.server 8000
+```
+
+此时 `samconfig.toml` 默认 Cognito 回调 URL 为 `http://localhost:8000/`，与本地预览匹配。
 
 ## 7. 部署说明
 
@@ -406,6 +532,18 @@ sam deploy --guided
 ```
 
 部署后，将输出的 `ApiUrl`、`CognitoDomain`、`CognitoClientId`、`AwsRegion` 写入 `frontend/config.js`。
+
+首次部署建议：
+
+```text
+cp frontend/config.example.js frontend/config.js
+sam build --template-file infra/template.yaml
+sam deploy --guided
+```
+
+`--guided` 时需填写前端实际 URL 作为 `FrontendCallbackUrl` 与 `FrontendLogoutUrl`（生产环境勿使用 localhost）。Cognito 回调与登出 URL 必须与浏览器实际访问地址完全一致（含协议与末尾斜杠），否则登录后会报 redirect 错误。
+
+**数据模型迁移：** 当前 `PK/SK` 表结构与早期仅用 `taskId` 作为主键的 demo 表不兼容。新部署可直接使用空表；若需保留旧任务，需一次性迁移脚本，将任务归属到指定 Cognito 用户并重写为 `USER#{sub}` / `TASK#{taskId}` 键。
 
 如果手动部署 `backend/lambda_function.py` 到 AWS Lambda，需要确保 Lambda 具备访问 DynamoDB 表的权限，并配置 API Gateway Cognito/JWT Authorizer。
 
@@ -455,7 +593,9 @@ Access-Control-Allow-Headers: content-type,authorization
 - 新闻依赖 RSS 源和代理服务，稳定性受外部网站影响。
 - 电影数据依赖 TMDB API Key 和外部网络可用性。
 - 天气数据在前端直接请求第三方服务，无法由后端统一审计或缓存。
-- 当前活动 UI 中没有附近餐厅模块；相关内容仅存在于归档计划文件中。
+- 当前活动 UI 中没有附近餐厅模块；相关内容归档在 `archive/` 目录。
+- 新闻客户端兜底依赖第三方 CORS 代理，可用性与稳定性不受项目控制。
+- 电影 Lambda 内存缓存仅在单次冷启动实例内有效，实例回收后缓存失效。
 
 ## 10. 适合的后续改进
 

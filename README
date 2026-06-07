@@ -17,10 +17,9 @@
 - 深色 / 浅色主题
 
 重要文件：
-- `APPLICATION_DOCUMENTATION.md`：完整应用文档
-- `AUTHENTICATION.md`：身份系统和安全边界说明
-- `frontend/API_GATEWAY_CHECKLIST.txt`：API Gateway / CORS / Authorizer 检查清单
+- `APPLICATION_DOCUMENTATION.md`：完整应用文档（部署、API、认证、配置均在此）
 - `infra/template.yaml`：Cognito、API Gateway、Lambda、DynamoDB 的 SAM 模板
+- `archive/`：历史设计与已合并的旧专题文档
 
 本地测试：
 
