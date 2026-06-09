@@ -83,8 +83,10 @@ Resources:
         - profile
       CallbackURLs:
         - !Ref FrontendCallbackUrl
+        - http://localhost:8000
       LogoutURLs:
         - !Ref FrontendLogoutUrl
+        - http://localhost:8000
       ExplicitAuthFlows:
         - ALLOW_REFRESH_TOKEN_AUTH
         - ALLOW_USER_SRP_AUTH
