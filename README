@@ -1,31 +1,120 @@
-这个项目是一个 serverless 个人 Dashboard / Personal Toolkit。
+# Personal Toolkit AWS
 
-核心架构：
-- 前端：S3 静态站点，原生 HTML/CSS/JavaScript
-- 身份：Amazon Cognito User Pool + Hosted UI + OAuth Code with PKCE
-- API：API Gateway HTTP API + Cognito JWT Authorizer
-- 后端：AWS Lambda (Python)
-- 数据：DynamoDB，按 Cognito `sub` 做用户隔离
-- 基础设施：AWS SAM 模板位于 `infra/template.yaml`
+Personal Toolkit is a serverless personal dashboard built with AWS SAM, Amazon Cognito, API Gateway, Lambda, DynamoDB, S3, CloudFront, and vanilla JavaScript.
 
-当前功能：
-- Cognito 登录 / 登出 / 会话恢复
-- 待办任务：新增、完成、星标、重命名、删除、筛选
-- 国际新闻聚合
-- 本地电影信息（TMDB）
-- 城市天气与 5 天预报（Open-Meteo）
-- 深色 / 浅色主题
+The application combines authenticated personal tasks, weather, international news, and local movie discovery in a single private dashboard. It is designed as a production-oriented portfolio project rather than a basic CRUD demo: authentication, per-user data isolation, infrastructure as code, and GitHub Actions CI/CD are all included.
 
-重要文件：
-- `APPLICATION_DOCUMENTATION.md`：完整应用文档（部署、API、认证、配置均在此）
-- `infra/template.yaml`：Cognito、API Gateway、Lambda、DynamoDB 的 SAM 模板
-- `archive/`：历史设计与已合并的旧专题文档
+## Highlights
 
-本地测试：
+- Secure sign-in with Amazon Cognito Hosted UI and OAuth 2.0 Authorization Code + PKCE.
+- Per-user task isolation using Cognito `sub` claims and DynamoDB partition keys.
+- Serverless backend with API Gateway HTTP API and a Python Lambda router.
+- Static frontend deployed to S3 and served through CloudFront over HTTPS.
+- External data integrations for RSS news, TMDB movies, and Open-Meteo weather.
+- GitHub Actions CI/CD for tests, SAM validation, SAM build, backend deployment, frontend S3 sync, and CloudFront invalidation.
+
+## Architecture
 
 ```text
-python3 -m unittest discover -s tests
-node --check frontend/app.js
+Browser
+  -> CloudFront
+  -> S3 static frontend
+  -> Cognito Hosted UI for authentication
+  -> API Gateway HTTP API with JWT authorizer
+  -> Lambda
+       -> DynamoDB for user-scoped tasks
+       -> RSS feeds for news
+       -> TMDB for movie data
+
+Browser also calls Open-Meteo and OpenStreetMap Nominatim directly for weather and location lookup.
 ```
 
-部署后需要把 SAM 输出的 `ApiUrl`、`CognitoDomain`、`CognitoClientId`、`AwsRegion` 写入 `frontend/config.js`。
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the full system design and deployment flow.
+
+## Features
+
+- Authentication: sign in, sign out, session restore, token refresh, PKCE callback handling.
+- Tasks: create, complete, star, rename, delete, filter, and persist tasks per authenticated user.
+- News: aggregate international RSS headlines with backend degradation handling and client-side RSS fallback.
+- Movies: browse now-playing and upcoming movies by inferred local region through TMDB.
+- Weather: search cities, use browser geolocation, view current weather and a 5-day forecast.
+- UI: light/dark theme, responsive dashboard layout, reduced-motion support, and accessible controls.
+
+## Repository Structure
+
+```text
+todo_aws/
+├── frontend/                    Static SPA: HTML, CSS, JavaScript
+├── backend/lambda_function.py    Python Lambda handler and route logic
+├── infra/template.yaml           AWS SAM template
+├── tests/                        Unit tests for auth and isolation behavior
+├── .github/workflows/            CI/CD workflows
+├── ARCHITECTURE.md               Architecture and deployment overview
+├── APPLICATION_DOCUMENTATION.md  Detailed application documentation
+└── archive/                      Historical design notes
+```
+
+## Local Checks
+
+```bash
+python3 -m unittest discover -s tests
+python3 -m py_compile backend/lambda_function.py tests/test_lambda_auth.py tests/test_frontend_auth.py
+node --check frontend/app.js
+sam validate --template-file infra/template.yaml
+sam build --template-file infra/template.yaml
+```
+
+## Local Frontend Preview
+
+```bash
+cd frontend
+python3 -m http.server 8000
+```
+
+Then open:
+
+```text
+http://localhost:8000/
+```
+
+The SAM template keeps localhost callback URLs available for local Cognito testing.
+
+## CI/CD
+
+The project uses GitHub Actions:
+
+- `CI`: runs Python unit tests, Python compile checks, frontend JavaScript syntax checks, `sam validate`, and `sam build`.
+- `Deploy Backend`: manually deploys the AWS SAM backend stack with Cognito, API Gateway, Lambda, and DynamoDB.
+- `Deploy Frontend`: manually syncs `frontend/` to S3 and invalidates the CloudFront distribution.
+
+Required GitHub repository secrets:
+
+```text
+AWS_ACCESS_KEY_ID
+AWS_SECRET_ACCESS_KEY
+TMDB_API_KEY        # optional for deployment, required for the movie feature
+```
+
+## Deployment Notes
+
+After backend deployment, copy the SAM outputs into `frontend/config.js`:
+
+```text
+ApiUrl
+AwsRegion
+CognitoDomain
+CognitoClientId
+```
+
+For deployed Cognito callback/logout URLs, use HTTPS CloudFront URLs. Cognito allows `http://` only for localhost development URLs.
+
+## Portfolio Summary
+
+This project demonstrates:
+
+- Serverless AWS application design.
+- Cognito-based authentication and JWT authorization.
+- Secure multi-user data isolation.
+- Infrastructure as code with AWS SAM.
+- CI/CD with GitHub Actions.
+- Static frontend deployment through S3 and CloudFront.
