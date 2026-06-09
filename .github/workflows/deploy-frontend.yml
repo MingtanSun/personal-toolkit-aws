@@ -1,0 +1,43 @@
+name: Deploy Frontend
+
+on:
+  workflow_dispatch:
+    inputs:
+      bucket_name:
+        description: "S3 bucket for static frontend assets"
+        required: true
+        default: "davidsun-todo-frontend-2026"
+
+jobs:
+  deploy:
+    name: Upload frontend to S3
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: us-east-2
+      AWS_DEFAULT_REGION: us-east-2
+      S3_BUCKET: ${{ inputs.bucket_name }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Check frontend JavaScript
+        run: node --check frontend/app.js
+
+      - name: Upload frontend assets
+        run: |
+          aws s3 sync frontend/ "s3://$S3_BUCKET" \
+            --exclude "config.example.js" \
+            --cache-control "public, max-age=60"
+
+      - name: Show website endpoint
+        run: |
+          echo "S3 website endpoint:"
+          echo "http://$S3_BUCKET.s3-website.$AWS_REGION.amazonaws.com"
