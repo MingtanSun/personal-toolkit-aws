@@ -10,11 +10,11 @@ on:
       frontend_callback_url:
         description: "Cognito callback URL"
         required: true
-        default: "http://localhost:8000/"
+        default: "https://d1l863cphghqlg.cloudfront.net/"
       frontend_logout_url:
         description: "Cognito logout URL"
         required: true
-        default: "http://localhost:8000/"
+        default: "https://d1l863cphghqlg.cloudfront.net/"
 
 jobs:
   deploy:
