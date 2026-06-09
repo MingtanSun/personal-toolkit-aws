@@ -23,6 +23,12 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Set up AWS SAM CLI
+        uses: aws-actions/setup-sam@v3
+        with:
+          use-installer: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Run Python tests
         run: python3 -m unittest discover -s tests
 
@@ -31,3 +37,6 @@ jobs:
 
       - name: Check frontend JavaScript
         run: node --check frontend/app.js
+
+      - name: Validate AWS SAM template
+        run: sam validate --template-file infra/template.yaml
