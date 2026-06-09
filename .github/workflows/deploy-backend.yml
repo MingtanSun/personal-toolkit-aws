@@ -1,0 +1,72 @@
+name: Deploy Backend
+
+on:
+  workflow_dispatch:
+    inputs:
+      stack_name:
+        description: "CloudFormation stack name"
+        required: true
+        default: "personal-toolkit"
+      frontend_callback_url:
+        description: "Cognito callback URL"
+        required: true
+        default: "http://localhost:8000/"
+      frontend_logout_url:
+        description: "Cognito logout URL"
+        required: true
+        default: "http://localhost:8000/"
+
+jobs:
+  deploy:
+    name: Build and deploy backend
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: us-east-2
+      AWS_DEFAULT_REGION: us-east-2
+      STACK_NAME: ${{ inputs.stack_name }}
+      FRONTEND_CALLBACK_URL: ${{ inputs.frontend_callback_url }}
+      FRONTEND_LOGOUT_URL: ${{ inputs.frontend_logout_url }}
+      TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up AWS SAM CLI
+        uses: aws-actions/setup-sam@v3
+        with:
+          use-installer: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Build AWS SAM application
+        run: sam build --template-file infra/template.yaml
+
+      - name: Deploy AWS SAM stack
+        run: |
+          sam deploy \
+            --template-file .aws-sam/build/template.yaml \
+            --stack-name "$STACK_NAME" \
+            --region "$AWS_REGION" \
+            --resolve-s3 \
+            --capabilities CAPABILITY_IAM \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --parameter-overrides \
+              StageName=prod \
+              FrontendCallbackUrl="$FRONTEND_CALLBACK_URL" \
+              FrontendLogoutUrl="$FRONTEND_LOGOUT_URL" \
+              TmdbApiKey="$TMDB_API_KEY"
+
+      - name: Show stack outputs
+        run: |
+          aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" \
+            --query "Stacks[0].Outputs" \
+            --output table
