@@ -7,6 +7,10 @@ on:
         description: "S3 bucket for static frontend assets"
         required: true
         default: "davidsun-todo-frontend-2026"
+      cloudfront_distribution_id:
+        description: "CloudFront distribution ID to invalidate after upload"
+        required: false
+        default: "E26N3TMX9NZSXN"
 
 jobs:
   deploy:
@@ -16,6 +20,7 @@ jobs:
       AWS_REGION: us-east-2
       AWS_DEFAULT_REGION: us-east-2
       S3_BUCKET: ${{ inputs.bucket_name }}
+      CLOUDFRONT_DISTRIBUTION_ID: ${{ inputs.cloudfront_distribution_id }}
 
     steps:
       - name: Checkout repository
@@ -37,7 +42,16 @@ jobs:
             --exclude "config.example.js" \
             --cache-control "public, max-age=60"
 
-      - name: Show website endpoint
+      - name: Invalidate CloudFront cache
+        if: ${{ env.CLOUDFRONT_DISTRIBUTION_ID != '' }}
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
+            --paths "/*"
+
+      - name: Show frontend URLs
         run: |
           echo "S3 website endpoint:"
           echo "http://$S3_BUCKET.s3-website.$AWS_REGION.amazonaws.com"
+          echo "CloudFront URL:"
+          echo "https://d1l863cphghqlg.cloudfront.net"

@@ -45,6 +45,21 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Validate Cognito callback URLs
+        run: |
+          validate_url() {
+            local name="$1"
+            local value="$2"
+            if [[ "$value" == https://* || "$value" == http://localhost:* || "$value" == http://localhost ]]; then
+              return 0
+            fi
+            echo "::error::$name must use https:// for deployed sites. Cognito only allows http:// for localhost development URLs."
+            exit 1
+          }
+
+          validate_url "frontend_callback_url" "$FRONTEND_CALLBACK_URL"
+          validate_url "frontend_logout_url" "$FRONTEND_LOGOUT_URL"
+
       - name: Build AWS SAM application
         run: sam build --template-file infra/template.yaml
 
