@@ -43,3 +43,6 @@ jobs:
 
       - name: Validate AWS SAM template
         run: sam validate --template-file infra/template.yaml
+
+      - name: Build AWS SAM application
+        run: sam build --template-file infra/template.yaml
