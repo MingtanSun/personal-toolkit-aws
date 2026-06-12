@@ -492,6 +492,10 @@ async function readApiErrorMessage(res, fallback) {
   }
 }
 
+function normalizeTaskPriority(value) {
+  return value === "low" || value === "normal" || value === "high" ? value : "normal";
+}
+
 const WEATHER_STORAGE_KEY = "todoApp_weatherCity";
 const DEFAULT_WEATHER_CITY = {
   lat: 43.6532,
@@ -1066,6 +1070,26 @@ async function loadTasks() {
       });
     }
 
+    const prioritySelect = document.createElement("select");
+    const priority = normalizeTaskPriority(task.priority);
+    prioritySelect.className = `priority-select task-priority priority-${priority}`;
+    prioritySelect.setAttribute("aria-label", `Priority for ${task.title}`);
+    [
+      ["low", "Low"],
+      ["normal", "Normal"],
+      ["high", "High"]
+    ].forEach(([value, text]) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = text;
+      prioritySelect.appendChild(option);
+    });
+    prioritySelect.value = priority;
+    prioritySelect.addEventListener("change", () => {
+      prioritySelect.className = `priority-select task-priority priority-${prioritySelect.value}`;
+      setPriority(task.taskId, prioritySelect.value);
+    });
+
     const delBtn = document.createElement("button");
     delBtn.type = "button";
     delBtn.className = "btn btn-delete";
@@ -1075,6 +1099,7 @@ async function loadTasks() {
     li.appendChild(cb);
     li.appendChild(starBtn);
     li.appendChild(label);
+    li.appendChild(prioritySelect);
     li.appendChild(delBtn);
     list.appendChild(li);
   });
@@ -1115,6 +1140,27 @@ async function setStarred(id, starred) {
   if (!res.ok) {
     const msg = await readApiErrorMessage(res, "Could not update task.");
     console.error("setStarred failed", res.status, msg);
+    showTaskListError(msg);
+  }
+  await loadTasks();
+}
+
+async function setPriority(id, priority) {
+  const normalized = normalizeTaskPriority(priority);
+  const res = await apiFetch("/tasks", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      op: "setPriority",
+      taskId: id,
+      priority: normalized
+    })
+  });
+  if (!res.ok) {
+    const msg = await readApiErrorMessage(res, "Could not update task priority.");
+    console.error("setPriority failed", res.status, msg);
     showTaskListError(msg);
   }
   await loadTasks();
@@ -1200,7 +1246,9 @@ function startTaskTitleEdit(taskId, currentTitle, rowEl) {
 
 async function addTask() {
   const input = document.getElementById("taskInput");
+  const prioritySelect = document.getElementById("taskPriority");
   const title = input.value.trim();
+  const priority = normalizeTaskPriority(prioritySelect?.value);
   clearAddError();
   if (!title) return;
 
@@ -1209,7 +1257,7 @@ async function addTask() {
     headers: {
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({ title })
+    body: JSON.stringify({ title, priority })
   });
 
   if (!res.ok) {
@@ -1225,6 +1273,7 @@ async function addTask() {
   }
 
   input.value = "";
+  if (prioritySelect) prioritySelect.value = "normal";
   loadTasks();
 }
 

@@ -39,6 +39,8 @@ class FakeTable:
             item["starred"] = vals[":s"]
         if ":t" in vals:
             item["title"] = vals[":t"]
+        if ":p" in vals:
+            item["priority"] = vals[":p"]
         if ":u" in vals:
             item["updatedAt"] = vals[":u"]
         return {}
@@ -158,6 +160,63 @@ class LambdaAuthTests(unittest.TestCase):
         self.assertEqual(item["PK"], "USER#alice")
         self.assertTrue(item["SK"].startswith("TASK#"))
         self.assertEqual(item["userId"], "alice")
+
+    def test_created_task_defaults_to_normal_priority(self):
+        response = self.mod.lambda_handler(
+            event("POST", "/tasks", "alice", {"title": "Default priority task"}),
+            None,
+        )
+        self.assertEqual(response["statusCode"], 200)
+        self.assertEqual(self.body(response)["task"]["priority"], "normal")
+        stored = next(iter(self.mod.table.items.values()))
+        self.assertEqual(stored["priority"], "normal")
+
+    def test_created_task_accepts_valid_priority(self):
+        response = self.mod.lambda_handler(
+            event("POST", "/tasks", "alice", {"title": "Important task", "priority": "high"}),
+            None,
+        )
+        self.assertEqual(response["statusCode"], 200)
+        self.assertEqual(self.body(response)["task"]["priority"], "high")
+        stored = next(iter(self.mod.table.items.values()))
+        self.assertEqual(stored["priority"], "high")
+
+    def test_created_task_rejects_invalid_priority(self):
+        response = self.mod.lambda_handler(
+            event("POST", "/tasks", "alice", {"title": "Odd task", "priority": "urgent"}),
+            None,
+        )
+        self.assertEqual(response["statusCode"], 400)
+        self.assertEqual(self.body(response)["error"], "invalid_request")
+        self.assertEqual(self.mod.table.items, {})
+
+    def test_set_priority_updates_existing_task(self):
+        create = self.mod.lambda_handler(
+            event("POST", "/tasks", "alice", {"title": "Prioritize me"}),
+            None,
+        )
+        task_id = self.body(create)["task"]["taskId"]
+        update = self.mod.lambda_handler(
+            event("POST", "/tasks", "alice", {"op": "setPriority", "taskId": task_id, "priority": "low"}),
+            None,
+        )
+        self.assertEqual(update["statusCode"], 200)
+        stored = next(iter(self.mod.table.items.values()))
+        self.assertEqual(stored["priority"], "low")
+
+    def test_user_cannot_update_another_users_task_priority(self):
+        create = self.mod.lambda_handler(
+            event("POST", "/tasks", "alice", {"title": "Alice task", "priority": "high"}),
+            None,
+        )
+        task_id = self.body(create)["task"]["taskId"]
+        update = self.mod.lambda_handler(
+            event("POST", "/tasks", "bob", {"op": "setPriority", "taskId": task_id, "priority": "low"}),
+            None,
+        )
+        self.assertEqual(update["statusCode"], 404)
+        stored = next(iter(self.mod.table.items.values()))
+        self.assertEqual(stored["priority"], "high")
 
     def test_user_cannot_update_another_users_task(self):
         create = self.mod.lambda_handler(

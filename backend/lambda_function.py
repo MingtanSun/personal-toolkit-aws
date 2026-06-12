@@ -113,6 +113,7 @@ def _public_task(item):
         "starred": bool(item.get("starred", False)),
         "createdAt": item.get("createdAt", ""),
         "updatedAt": item.get("updatedAt", ""),
+        "priority": item.get("priority", "normal"),
     }
 
 
@@ -451,6 +452,28 @@ def handle_post_tasks(user, body):
             raise
         return json_response(200, {"message": "Task updated"})
 
+    if body.get("op") == "setPriority":
+        task_id = body.get("taskId")
+        priority = body.get("priority")
+        
+        if not task_id or "priority" not in body:
+            return error_response(400, "taskId and priority are required", "invalid_request")
+            
+        if priority != "normal" and priority != "high" and priority != "low" :
+            return error_response(400, "priority must be normal, high, or low", "invalid_request")
+        try:
+            table.update_item(
+                Key={"PK": pk, "SK": _task_sk(task_id)},
+                UpdateExpression="SET priority = :p, updatedAt = :u",
+                ConditionExpression="attribute_exists(PK) AND attribute_exists(SK)",
+                ExpressionAttributeValues={":p": priority, ":u": now},
+            )
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+                return error_response(404, "Task not found", "task_not_found")
+            raise
+        return json_response(200, {"message": "Task updated"})
+
     if body.get("op") == "setCompleted":
         task_id = body.get("taskId")
         if not task_id or "completed" not in body:
@@ -490,7 +513,10 @@ def handle_post_tasks(user, body):
     title = body.get("title")
     completed = bool(body.get("completed", False))
     starred = bool(body.get("starred", False))
-
+    priority = body.get("priority", "normal")
+    if priority != "normal" and priority != "high" and priority != "low" :
+        return error_response(400, "priority must be normal, high, or low", "invalid_request")
+    
     if title is None or not str(title).strip():
         return error_response(400, "title is required", "invalid_request")
 
@@ -507,6 +533,7 @@ def handle_post_tasks(user, body):
         "starred": starred,
         "createdAt": now,
         "updatedAt": now,
+        "priority": priority,
     }
     table.put_item(
         Item=item,

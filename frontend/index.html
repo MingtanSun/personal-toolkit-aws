@@ -150,6 +150,11 @@
               autocomplete="off"
               aria-label="New task"
             />
+            <select id="taskPriority" class="priority-select composer-priority" aria-label="Task priority">
+              <option value="low">Low</option>
+              <option value="normal" selected>Normal</option>
+              <option value="high">High</option>
+            </select>
             <button type="button" class="add-button" onclick="addTask()" aria-label="Add task">+</button>
           </div>
           <p id="addError" class="composer-error" role="alert" hidden></p>
