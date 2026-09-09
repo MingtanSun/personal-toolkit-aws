@@ -11,7 +11,9 @@ src/
 ├── config.ts          environment configuration
 ├── dynamodb.ts        DynamoDB document client
 ├── tasks.ts           task data operations
-└── subscription.ts    subscription data operations and AI analysis
+├── subscription.ts    subscription data operations and AI analysis
+├── agent.ts           LangChain agent, tools, prompt, and checkpointer
+└── agentTools.ts      deterministic subscription queries and calculations
 ```
 
 ## Run locally
@@ -54,6 +56,8 @@ POST   /api/v1/subscription/submit
 GET    /api/v1/subscription
 PUT    /api/v1/subscription
 DELETE /api/v1/subscription
+
+POST   /api/v1/agent/message
 ```
 
 `/health` is public. Every `/api/v1/*` request must provide a Cognito access token:
@@ -63,6 +67,17 @@ Authorization: Bearer <access-token>
 ```
 
 The analyze endpoint expects a `multipart/form-data` upload whose file field is named `screenshot`.
+
+The agent endpoint expects JSON:
+
+```json
+{
+  "message": "Which subscriptions renew in the next 30 days?",
+  "conversationId": "a-browser-generated-uuid"
+}
+```
+
+It returns `{ "reply": "..." }`. LangChain selects from read-only subscription tools, and LangGraph `MemorySaver` keeps thread-scoped context while the Node.js process remains alive. The memory is intentionally not persisted across backend restarts in this version.
 
 ## Commands
 

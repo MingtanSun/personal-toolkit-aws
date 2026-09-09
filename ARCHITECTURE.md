@@ -11,7 +11,7 @@ flowchart LR
   Browser --> Cognito[Cognito Hosted UI]
   Docker --> Tasks[(Tasks table)]
   Docker --> Subscriptions[(Subscriptions table)]
-  Docker --> DeepSeek[DeepSeek multimodal API]
+  Docker --> DeepSeek[DeepSeek multimodal and chat API]
   Browser --> OpenMeteo[Open-Meteo geocoding and forecast APIs]
 ```
 
@@ -38,6 +38,41 @@ The API never trusts a browser-supplied user ID.
 7. React lets the user correct the fields before a separate save request writes the record to DynamoDB.
 
 The DeepSeek API key exists only in the backend container. Screenshot content and the user's current subscription records are shared with the AI provider when analysis is requested.
+
+## Conversational agent flow
+
+1. React creates a UUID for the current browser conversation and sends it with each message.
+2. Express authenticates the request and combines the verified Cognito `sub` with the conversation UUID to form the LangGraph `thread_id`.
+3. The LangChain agent receives only the current user message; its checkpointer restores earlier state for the same thread.
+4. The model selects from Zod-described, read-only tools instead of receiving unrestricted database access.
+5. A tool uses `runtime.context.userId` to query only the authenticated user's DynamoDB records.
+6. Internal DynamoDB keys are removed before tool results are returned to the model.
+7. The model turns the tool result into the final user-facing response, and React appends it to the chat panel.
+
+```mermaid
+sequenceDiagram
+  participant Browser
+  participant Express
+  participant Agent as LangChain agent
+  participant Memory as LangGraph MemorySaver
+  participant DB as DynamoDB
+  participant Model as DeepSeek chat model
+
+  Browser->>Express: message + conversationId + access token
+  Express->>Agent: current message + user context + thread_id
+  Agent->>Memory: restore thread state
+  Agent->>Model: messages + available tool schemas
+  Model-->>Agent: tool call
+  Agent->>DB: authenticated user query
+  DB-->>Agent: subscription records
+  Agent->>Model: sanitized tool result
+  Model-->>Agent: final response
+  Agent->>Memory: checkpoint updated state
+  Agent-->>Express: final response
+  Express-->>Browser: { reply }
+```
+
+The current `MemorySaver` is intentionally process-local: it supports follow-up questions while the backend process remains alive, but it is not durable across container replacements or server restarts. The `conversationId` is not an authorization boundary; DynamoDB access always uses the verified Cognito user ID supplied through runtime context.
 
 ## Data model
 

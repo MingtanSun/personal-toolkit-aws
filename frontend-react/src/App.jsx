@@ -10,6 +10,7 @@ import { getAppConfig } from "./config";
 import TasksPanel from "./components/TasksPanel";
 import WeatherPanel from "./components/WeatherPanel";
 import SubscriptionsPanel from './components/SubscriptionsPanel';
+import AgentChat from "./components/AgentChat";
 
 function formatDashboardDate() {
   return new Intl.DateTimeFormat(undefined, {
@@ -176,15 +177,18 @@ function App() {
         </button>
       </section>
       ) : (
-        <div className="dashboard-content">
-          <main className="dashboard-main" aria-label="Subscription workspace">
-            <SubscriptionsPanel auth={auth} setAuth={setAuth} onAuthExpired={setAuthError} />
-          </main>
-          <aside className="dashboard-sidebar" aria-label="Productivity tools">
-            <WeatherPanel />
-            <TasksPanel auth={auth} setAuth={setAuth} onAuthExpired={setAuthError} />
-          </aside>
-        </div>
+        <>
+          <div className="dashboard-content">
+            <main className="dashboard-main" aria-label="Subscription workspace">
+              <SubscriptionsPanel auth={auth} setAuth={setAuth} onAuthExpired={setAuthError} />
+            </main>
+            <aside className="dashboard-sidebar" aria-label="Productivity tools">
+              <WeatherPanel />
+              <TasksPanel auth={auth} setAuth={setAuth} onAuthExpired={setAuthError} />
+            </aside>
+          </div>
+          <AgentChat auth={auth} setAuth={setAuth} onAuthExpired={setAuthError} />
+        </>
       )}
     </div>
   );

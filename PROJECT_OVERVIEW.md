@@ -2,7 +2,7 @@
 
 ## Project summary
 
-SubLens is a full-stack AWS portfolio application for tracking recurring subscriptions. Its central feature accepts a billing or account screenshot, uses a multimodal large language model to extract structured subscription details, and asks the user to review the result before it is stored.
+SubLens is a full-stack AWS portfolio application for tracking recurring subscriptions. Its AI features combine multimodal extraction with a conversational, tool-using agent that answers questions using authenticated subscription data.
 
 The project demonstrates a complete web application lifecycle:
 
@@ -11,11 +11,23 @@ The project demonstrates a complete web application lifecycle:
 - an authenticated Express API;
 - user-isolated NoSQL data;
 - multipart image upload and AI integration;
+- LangChain tool orchestration and LangGraph thread-scoped memory;
+- deterministic business calculations exposed through Zod-validated tools;
 - containerized cloud hosting;
 - infrastructure as code;
 - CI and repeatable deployment workflows.
 
 The product also includes personal task management and a compact weather panel.
+
+## Agent user journey
+
+1. The authenticated user opens the floating SubLens assistant.
+2. React sends the current message and a browser-generated conversation UUID.
+3. Express derives the user identity from the verified access token and builds a user-scoped `thread_id`.
+4. LangGraph restores the thread's process-local state, and the LangChain agent decides whether to call a subscription tool.
+5. The selected tool queries or calculates against that user's DynamoDB records.
+6. The model receives a sanitized result without DynamoDB keys and writes the final answer.
+7. Follow-up messages reuse the same thread, allowing references such as “it” to resolve from previous turns.
 
 ## Main user journey
 
@@ -140,6 +152,8 @@ POST   /api/v1/subscription/submit
 GET    /api/v1/subscription
 PUT    /api/v1/subscription
 DELETE /api/v1/subscription
+
+POST   /api/v1/agent/message
 ```
 
 The health route is public. All versioned application routes require authentication.
@@ -189,6 +203,14 @@ Multimodal model output can be incomplete or incorrect. SubLens separates analys
 
 Calling the provider from Express keeps the API key out of the browser and lets the backend include authenticated user context for duplicate comparison.
 
+### Tool-mediated agent access
+
+The conversational model does not receive database credentials or a browser-provided user ID. It selects from narrow, read-only tools whose implementations obtain the verified user identity from runtime context. Zod schemas constrain model-generated arguments, while deterministic TypeScript handles querying, totals, matching, and renewal-date calculations.
+
+### Thread-scoped short-term memory
+
+LangGraph `MemorySaver` checkpoints Agent state under a `userId:conversationId` key. This demonstrates multi-turn state and user/thread isolation without presenting process memory as durable storage. A database-backed checkpointer is a planned production extension.
+
 ### Cognito `sub` for isolation
 
 Using the verified token claim as the DynamoDB partition-key input provides a direct connection between authentication and data access.
@@ -214,6 +236,8 @@ The application currently provides:
 - editable subscription confirmation;
 - subscription create, read, update, and delete operations;
 - possible-duplicate warnings;
+- a LangChain subscription agent with five read-only tools;
+- multi-turn, thread-scoped short-term memory;
 - private task management;
 - weather and city search;
 - light and dark themes;

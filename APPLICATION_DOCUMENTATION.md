@@ -2,7 +2,7 @@
 
 ## Overview
 
-SubLens is an authenticated subscription tracker and personal dashboard. Its main workflow turns a subscription screenshot into editable structured data, lets the user confirm the result, and stores the final record in DynamoDB. The same account also includes private task management and weather search.
+SubLens is an authenticated subscription tracker and personal dashboard. Its main workflow turns a subscription screenshot into editable structured data, lets the user confirm the result, and stores the final record in DynamoDB. Users can also chat with a tool-using subscription agent, manage private tasks, and search weather forecasts.
 
 ## Frontend
 
@@ -18,6 +18,7 @@ Important files:
 - `src/components/Subscriptions/SubscriptionInfoRender.jsx`: editable AI result fields and duplicate warning.
 - `src/components/Subscriptions/SubscriptionConfirm.jsx`: confirmed subscription save request.
 - `src/components/Subscriptions/DisplaySubscription.jsx`: saved subscription list.
+- `src/components/AgentChat.jsx`: floating authenticated agent chat, browser conversation ID, and suggested questions.
 - `src/components/TasksPanel.jsx`: task management interface.
 - `src/components/WeatherPanel.jsx`: Ottawa weather, forecast, and city search.
 - `public/config.js`: browser runtime configuration for the API and Cognito.
@@ -35,7 +36,9 @@ backend-express/src/
 ├── config.ts          Environment variable loading
 ├── dynamodb.ts        DynamoDB document client
 ├── tasks.ts           Task data operations
-└── subscription.ts    Subscription data operations and AI analysis
+├── subscription.ts    Subscription data operations and AI analysis
+├── agent.ts           LangChain agent, tools, prompt, and short-term memory
+└── agentTools.ts      deterministic subscription calculations used by tools
 ```
 
 `server.ts` is the best starting point. It registers CORS and JSON parsing, exposes the public health route, applies authentication to `/api/v1`, and then defines task and subscription routes.
@@ -81,6 +84,22 @@ Accepted image types are PNG, JPEG, and WebP.
 
 `similarSubscriptionWarning` is displayed only in the current analysis result. It is not saved as a DynamoDB field.
 
+## Subscription agent
+
+`POST /api/v1/agent/message` accepts the current message and a browser-generated `conversationId`. Express combines that ID with the authenticated Cognito `sub` to create a user-scoped LangGraph `thread_id`.
+
+The agent uses LangChain's `createAgent`, Zod tool schemas, the OpenAI-compatible DeepSeek chat API, and LangGraph `MemorySaver`. It can:
+
+- calculate spending across monthly-billed subscriptions;
+- return the subscription with the highest stored amount;
+- inspect possible duplicate or similar subscriptions;
+- find a particular service from several model-inferred candidate names;
+- calculate monthly or yearly subscriptions renewing within a requested number of days.
+
+Tools query DynamoDB through the authenticated `runtime.context.userId`; the model cannot supply or replace that identity. Internal `PK` and `SK` values are removed before subscription records are returned to the model.
+
+`MemorySaver` provides thread-scoped follow-up context within the running Node.js process. It is not persistent storage: restarting or replacing the backend container clears agent memory, and refreshing the browser starts a new conversation ID.
+
 ## Subscription management
 
 Subscriptions can be created, listed, replaced with edited values, and deleted. Stored fields are:
@@ -113,6 +132,8 @@ POST   /api/v1/subscription/submit
 GET    /api/v1/subscription
 PUT    /api/v1/subscription
 DELETE /api/v1/subscription
+
+POST   /api/v1/agent/message
 ```
 
 ## Task management

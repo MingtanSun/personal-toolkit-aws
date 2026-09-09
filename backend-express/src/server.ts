@@ -3,7 +3,6 @@ import express from "express";
 import multer from "multer";
 import { authenticate, type UserRequest } from "./auth.js";
 import { config } from "./config.js";
-import dayjs from 'dayjs';
 import {
   addTask,
   editTask,
@@ -12,8 +11,8 @@ import {
   type TaskChanges,
   type TaskPriority
 } from "./tasks.js";
-import { KeyObject } from "crypto";
 import { addSubscription, loadSubscription, deleteSubscription, updateSubscription, analyzeSubscriptionImage } from "./subscription.js";
+import { askModel } from './agent.js';
 
 const app = express();
 
@@ -207,7 +206,28 @@ app.put('/api/v1/subscription', async (req, res, _next) => {
   }
 
 
-})
+});
+
+app.post('/api/v1/agent/message', async (req, res) => {
+  const userId = (req as UserRequest).userId!;
+  const conversationId = typeof req.body.conversationId === "string"
+    ? req.body.conversationId.trim()
+    : "";
+  const message = typeof req.body.message === "string"
+    ? req.body.message.trim()
+    : "";
+
+  if (!conversationId || !message) {
+    return res.status(400).json({
+      message: "Message and conversationId are required"
+    });
+  }
+
+  const response = await askModel(message, conversationId, userId);
+  return res.status(200).json({
+    reply: response
+  });
+});
 
 app.use((_req, res) => {
   res.status(404).json({ message: "Route not found" });
