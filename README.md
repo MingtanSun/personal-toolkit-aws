@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/MingtanSun/personal-toolkit-aws/actions/workflows/ci.yml/badge.svg)](https://github.com/MingtanSun/personal-toolkit-aws/actions/workflows/ci.yml)
 
-SubLens is an AI-assisted subscription tracker and personal dashboard built as a full-stack AWS portfolio project. Users can upload a subscription screenshot, review the details extracted by a multimodal model, save the corrected record, and ask a tool-using conversational agent questions about their private subscription data.
+SubLens is an AI-assisted subscription tracker and personal dashboard built as a full-stack AWS portfolio project. It combines multimodal subscription extraction with a LangChain-powered conversational agent that can securely reason over each user's stored subscription data.
 
 **Live demo:** [https://d1l863cphghqlg.cloudfront.net/](https://d1l863cphghqlg.cloudfront.net/)
 
@@ -12,7 +12,7 @@ SubLens is an AI-assisted subscription tracker and personal dashboard built as a
 - Extract service, plan, billing cycle, amount, currency, first payment date, website, and notes with a multimodal DeepSeek model.
 - Compare a new screenshot with the user's saved subscriptions and display a possible-duplicate warning.
 - Review and edit AI-generated fields before saving them.
-- Ask a LangChain agent about monthly spending, the highest-priced subscription, possible duplicates, individual services, and upcoming renewals.
+- Use a LangChain-powered subscription agent with five specialized tools for spending analysis, service lookup, duplicate detection, and upcoming renewal calculations.
 - Continue follow-up questions within the same browser conversation through LangGraph thread-scoped short-term memory.
 - Create, update, filter, star, prioritize, and delete personal tasks.
 - View current conditions and a five-day forecast, with Ottawa as the default and city search powered by Open-Meteo.
@@ -33,7 +33,7 @@ flowchart LR
     User --> OpenMeteo[Open-Meteo APIs]
 ```
 
-The browser signs in with Cognito and sends an access token with protected API requests. Express verifies the JWT, reads the user's `sub`, and uses it to query that user's DynamoDB records. Subscription screenshots are sent to Express as `multipart/form-data`; the API keeps the provider key on the server and sends the image to the multimodal model for analysis. Agent requests use LangChain tools backed by the same authenticated data layer, while LangGraph's `MemorySaver` isolates short-term state by a server-generated `userId:conversationId` thread key.
+The browser signs in with Cognito and sends an access token with protected API requests. Express verifies the JWT, reads the user's `sub`, and uses it to query that user's DynamoDB records. Subscription screenshots are sent to Express as `multipart/form-data`; the API keeps the provider key on the server and sends the image to the multimodal model for analysis. For conversational requests, LangChain orchestrates the DeepSeek chat model and typed subscription tools. LangGraph maintains thread-scoped short-term memory, while authenticated runtime context ensures that every tool queries only the current user's DynamoDB records.
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for the complete request and deployment flow.
 
@@ -45,7 +45,8 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for the complete request and deployment
 | Backend | Node.js, Express 5, TypeScript, Multer |
 | Authentication | Amazon Cognito, OAuth 2.0 Authorization Code + PKCE, `aws-jwt-verify` |
 | Data | Amazon DynamoDB, AWS SDK for JavaScript v3 |
-| AI | DeepSeek multimodal and chat APIs, LangChain agents and tools, LangGraph short-term memory, Zod tool schemas |
+| Agent framework | LangChain `createAgent` and typed tools, LangGraph `MemorySaver`, Zod schemas |
+| Models | DeepSeek multimodal and OpenAI-compatible chat APIs |
 | Cloud | EC2, Docker, ECR, S3, CloudFront, CodeBuild, Systems Manager, IAM |
 | Delivery | GitHub Actions, AWS SAM, CloudFormation |
 
@@ -106,7 +107,7 @@ Requirements:
 - Node.js 22 or newer
 - AWS credentials that can access the configured DynamoDB tables
 - A Cognito user pool and SPA client
-- A DeepSeek API key for screenshot analysis
+- A DeepSeek API key for screenshot analysis and the conversational agent
 
 Start the backend:
 
@@ -151,4 +152,4 @@ Repository secrets are used for AWS credentials and `DEEPSEEK_API_KEY`; secrets 
 
 ## Project status
 
-SubLens is a working portfolio project with a deployed frontend, authenticated API, persistent user data, AI-assisted screenshot analysis, a tool-using subscription agent, and repeatable cloud deployment. Agent conversations currently use process-local `MemorySaver` checkpoints, so conversational context resets when the Node.js process restarts; durable checkpoint storage is intentionally left as a documented next step.
+SubLens is a working portfolio project with a deployed frontend, authenticated API, persistent user data, multimodal subscription extraction, and a LangChain-powered conversational agent with tool calling and short-term memory. Agent conversations currently use process-local `MemorySaver` checkpoints, so conversational context resets when the Node.js process restarts; durable checkpoint storage is intentionally left as a documented next step.
