@@ -12,7 +12,7 @@ SubLens is an AI-assisted subscription tracker and personal dashboard built as a
 - Extract service, plan, billing cycle, amount, currency, first payment date, website, and notes with a multimodal DeepSeek model.
 - Compare a new screenshot with the user's saved subscriptions and display a possible-duplicate warning.
 - Review and edit AI-generated fields before saving them.
-- Use a LangChain-powered subscription agent with five specialized tools for spending analysis, service lookup, duplicate detection, and upcoming renewal calculations.
+- Use a LangChain-powered subscription agent with seven specialized tools for spending analysis, service lookup, duplicate detection, upcoming renewal calculations, and conversationally confirmed amount updates and subscription deletion.
 - Continue follow-up questions within the same browser conversation through LangGraph thread-scoped short-term memory.
 - Create, update, filter, star, prioritize, and delete personal tasks.
 - View current conditions and a five-day forecast, with Ottawa as the default and city search powered by Open-Meteo.

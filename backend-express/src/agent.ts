@@ -1,6 +1,6 @@
 import { ChatOpenAI } from "@langchain/openai";
 import { config } from './config.js';
-import { createAgent, tool } from "langchain";
+import { createAgent, tool, humanInTheLoopMiddleware, modelCallLimitMiddleware } from "langchain";
 import { z } from "zod";
 import {
     calculateCostMonthly,
@@ -10,9 +10,11 @@ import {
     getUpcomingSubscriptions
 } from './agentTools.js';
 import { MemorySaver } from "@langchain/langgraph";
+import { deleteSubscription, updateSubscriptionAmount } from './subscription.js';
 
 function toPublicSubscription(subscription: Awaited<ReturnType<typeof getAllSubscriptions>>[number]) {
     return {
+        SK: subscription.SK,
         serviceName: subscription.serviceName,
         planName: subscription.planName,
         billingCycle: subscription.billingCycle,
@@ -91,7 +93,7 @@ const getSubscriptionByNameTool = tool(
         const possibleServiceName = input.serviceName;
         const result = await getParticularSubscription(context.userId, possibleServiceName);
 
-        return JSON.stringify(result.map(toPublicSubscription));
+        return JSON.stringify(result);
 
     },
     {
@@ -127,17 +129,68 @@ const upcomingSubscriptionsTool = tool(
             )
         })
     }
+);
+
+const updateCommandTool = tool(
+    async (input, runtime) => {
+        const context = runtime.context;
+        const subsId = input.subsId;
+        const amount = input.amount;
+        const result = await updateSubscriptionAmount(context.userId, subsId, amount);
+        return JSON.stringify(result);
+    },
+    {
+        name: 'update_subscription_amount',
+        description: "Updates the amount of one stored subscription using its SK. " +
+            "Only use this tool after the subscription has been identified and " +
+            "the user has explicitly confirmed the proposed update in a later message.",
+        schema: z.object({
+            subsId: z.string().describe('The exact SK returned by the subscription lookup tool'),
+            amount: z.number().describe('The new subscription amount requested by the user')
+        })
+    }
+)
+
+const deleteSubscriptionTool = tool(
+    async (input, runtime) => {
+        const context = runtime.context;
+        const result = await deleteSubscription(context.userId, input.subsId);
+        return JSON.stringify(result);
+    },
+    {
+        name: 'delete_subscription',
+        description: "Deletes one stored subscription using its SK. " +
+            "Only use this tool after the subscription has been identified and " +
+            "the user has explicitly confirmed the deletion in a later message.",
+        schema: z.object({
+            subsId: z.string().describe('The exact SK returned by the subscription lookup tool')
+        })
+    }
 )
 
 
 const agent = createAgent({
     model,
-    tools: [getMostExpensiveSubscriptionTool, getMonthlyCostTool, checkDuplicatesInSubscriptionsTool, getSubscriptionByNameTool, upcomingSubscriptionsTool],
+    tools: [getMostExpensiveSubscriptionTool, getMonthlyCostTool, checkDuplicatesInSubscriptionsTool, getSubscriptionByNameTool, upcomingSubscriptionsTool, updateCommandTool, deleteSubscriptionTool],
+    middleware:[
+        modelCallLimitMiddleware({
+            runLimit: 3,
+            threadLimit: 30,
+            exitBehavior: 'end'
+        })
+    ],
     contextSchema,
     systemPrompt: `
     You are a subscription assistant. Use tools whenever the user asks about their stored subscription data.
     Base answers about stored subscriptions only on tool results. Never expose PK, SK, userId, or other internal fields.
     Do not invent amounts, currencies, plans, billing cycles, payment dates, or other subscription information.
+    Only handle questions and actions related to the user's subscriptions.
+
+    If a request is unrelated to subscription management, do not answer it.
+    Reply exactly:
+    "I can only help with subscription-related questions."
+    Do not write essays, code, stories, translations, homework, marketing content,
+    or answer unrelated general-knowledge questions.
 
     When checking possible duplicate or similar subscriptions:
     - Reply in no more than two sentences.
@@ -159,6 +212,26 @@ const agent = createAgent({
     - If multiple subscriptions are returned, briefly list the possible matches and ask the user which one they mean.
     - Reply in no more than three sentences.
     - Do not mention tool names or other internal implementation details.
+
+    When the user asks to update a subscription amount:
+    - First use the find_subscriptions_by_possible_names tool to find the subscription.
+    - Do not call update_subscription_amount during the same user turn as the initial update request.
+    - If exactly one subscription is found, tell the user the service name, current amount, and requested new amount, then ask for confirmation.
+    - Only call update_subscription_amount after the user explicitly confirms in a later message.
+    - Treat messages such as "yes", "confirm", "确定", and "确认" as confirmation only when there is a pending update request in the conversation.
+    - If the user rejects or cancels the change, do not call the update tool.
+    - If multiple subscriptions match, ask the user to choose one before requesting confirmation.
+    - If there is no pending update request, never interpret a standalone confirmation message as permission to update anything.
+
+    When the user asks to delete a subscription:
+    - First use the find_subscriptions_by_possible_names tool to find the subscription.
+    - Do not call delete_subscription during the same user turn as the initial deletion request.
+    - If exactly one subscription is found, tell the user the service name and ask for confirmation before deletion.
+    - Only call delete_subscription after the user explicitly confirms in a later message.
+    - Treat messages such as "yes", "confirm", "确定", and "确认" as confirmation only when there is a pending deletion request in the conversation.
+    - If the user rejects or cancels the deletion, do not call the delete tool.
+    - If multiple subscriptions match, ask the user to choose one before requesting confirmation.
+    - If there is no pending deletion request, never interpret a standalone confirmation message as permission to delete anything.
     `,
     checkpointer
 });

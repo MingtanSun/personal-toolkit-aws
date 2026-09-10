@@ -4,10 +4,12 @@ import OpenAI from 'openai';
 import {
     DeleteCommand,
     PutCommand,
-    QueryCommand
+    QueryCommand,
+    UpdateCommand
 } from "@aws-sdk/lib-dynamodb";
 import { config } from "./config.js";
 import { dynamodb } from "./dynamodb.js";
+import { success } from "zod";
 
 export interface Subscriptions {
     firstPaymentDate: string | null;
@@ -81,17 +83,26 @@ export async function loadSubscription(userId: string): Promise<Subscriptions[]>
     return subscriptions;
 }
 
-export async function deleteSubscription(userId: string, SubsId: string) {
-    const result = await dynamodb.send(
-        new DeleteCommand({
-            TableName: config.subscriptionsTableName,
-            Key: {
-                PK: `USER#${userId}`,
-                SK: SubsId
-            }
-        })
-    );
-
+export async function deleteSubscription(userId: string, SubsId: string): Promise<object> {
+    try {
+        await dynamodb.send(
+            new DeleteCommand({
+                TableName: config.subscriptionsTableName,
+                Key: {
+                    PK: `USER#${userId}`,
+                    SK: SubsId
+                }
+            })
+        );
+        return {
+            success: true
+        };
+    } catch (error) {
+        return {
+            success: false,
+            message: 'something wrong with internal database operation'
+        };
+    }
 }
 
 export async function updateSubscription(
@@ -124,6 +135,46 @@ export async function updateSubscription(
         })
     );
 };
+
+export async function updateSubscriptionAmount(userId: string,
+    SubsId: string, updatedAmount: number): Promise<object> {
+    if (!Number.isFinite(updatedAmount) || updatedAmount < 0) {
+        return {
+            success: false,
+            reason: 'this is not a valid input number'
+        };
+    }
+    try {
+        await dynamodb.send(
+            new UpdateCommand({
+                TableName: config.subscriptionsTableName,
+                Key: {
+                    PK: `USER#${userId}`,
+                    SK: SubsId
+                },
+                UpdateExpression: "SET #amount = :newAmount",
+                ExpressionAttributeNames: {
+                    "#amount": "amount"
+                },
+                ExpressionAttributeValues: {
+                    ":newAmount": updatedAmount
+                },
+                ConditionExpression:
+                    "attribute_exists(PK) AND attribute_exists(SK)",
+            })
+        )
+        return {
+            success: true,
+            updatedAmount
+        }
+        ;
+    } catch (error) {
+        return {
+            success: false,
+            message: 'something wrong with internal database operation'
+        }
+    }
+}
 
 
 export async function analyzeSubscriptionImage(mimetype: string, base64Image: string, subscriptions: Subscriptions[]) {
