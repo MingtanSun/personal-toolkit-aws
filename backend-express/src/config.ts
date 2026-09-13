@@ -18,5 +18,6 @@ export const config = {
   cognitoUserPoolId: required("COGNITO_USER_POOL_ID"),
   cognitoClientId: required("COGNITO_CLIENT_ID"),
   corsOrigin: process.env.CORS_ORIGIN || "http://localhost:8000",
-  deepseekApiKey: required("DEEPSEEK_API_KEY")
+  deepseekApiKey: required("DEEPSEEK_API_KEY"),
+  pineconeApiKey: required("PINECONE_API_KEY"),
 };

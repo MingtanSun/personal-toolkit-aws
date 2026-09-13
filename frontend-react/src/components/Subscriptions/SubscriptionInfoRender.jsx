@@ -81,9 +81,9 @@ function SubscriptionInfoRender({ result, setResult }) {
                     Amount
                     {result && amount === '' && <span className="empty-reminder">! Required</span>}
                 </span>
-                <input className="subscription-input" type="number" value={amount} onChange={(event) => {
+                <input className="subscription-input" type="text" value={amount} onChange={(event) => {
                     setAmount(event.target.value);
-                    updateResult('amount', Number(event.target.value));
+                    updateResult('amount', event.target.value);
                 }} />
             </label>
 

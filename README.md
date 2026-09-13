@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/MingtanSun/personal-toolkit-aws/actions/workflows/ci.yml/badge.svg)](https://github.com/MingtanSun/personal-toolkit-aws/actions/workflows/ci.yml)
 
-SubLens is an AI-assisted subscription tracker and personal dashboard built as a full-stack AWS portfolio project. It combines multimodal subscription extraction with a LangChain-powered conversational agent that can securely reason over each user's stored subscription data.
+SubLens is an AI-assisted subscription tracker and personal dashboard built as a full-stack AWS portfolio project. It combines multimodal subscription extraction, a LangChain-powered tool-using agent, Pinecone-backed retrieval-augmented generation (RAG), and human-in-the-loop approval for database-changing actions.
 
 **Live demo:** [https://d1l863cphghqlg.cloudfront.net/](https://d1l863cphghqlg.cloudfront.net/)
 
@@ -12,8 +12,14 @@ SubLens is an AI-assisted subscription tracker and personal dashboard built as a
 - Extract service, plan, billing cycle, amount, currency, first payment date, website, and notes with a multimodal DeepSeek model.
 - Compare a new screenshot with the user's saved subscriptions and display a possible-duplicate warning.
 - Review and edit AI-generated fields before saving them.
-- Use a LangChain-powered subscription agent with seven specialized tools for spending analysis, service lookup, duplicate detection, upcoming renewal calculations, and conversationally confirmed amount updates and subscription deletion.
+- Use a LangChain agent with eight specialized tools for spending analysis, service lookup, duplicate detection, upcoming renewals, provider-policy retrieval, amount updates, and stored-record deletion.
+- Retrieve cancellation, refund, billing, invoice, trial, and plan information from a source-linked Pinecone knowledge base instead of relying on unsupported model knowledge.
+- Process more than 40 Markdown knowledge documents with LangChain document loaders and `MarkdownTextSplitter`, preserving service, topic, source, retrieval date, and chunk metadata.
+- Use Pinecone integrated embeddings, service-level metadata filtering, and top-k semantic retrieval to ground policy answers.
+- Pause agent-initiated amount updates and stored-record deletions with LangChain human-in-the-loop middleware before either write tool executes.
+- Resume approved or rejected actions through the same LangGraph thread and checkpoint.
 - Continue follow-up questions within the same browser conversation through LangGraph thread-scoped short-term memory.
+- Limit model calls per run and conversation to reduce unintended token usage.
 - Create, update, filter, star, prioritize, and delete personal tasks.
 - View current conditions and a five-day forecast, with Ottawa as the default and city search powered by Open-Meteo.
 - Sign in through Amazon Cognito using OAuth 2.0 Authorization Code with PKCE.
@@ -30,12 +36,48 @@ flowchart LR
     User --> Cognito[Amazon Cognito Hosted UI]
     EC2 --> DynamoDB[(DynamoDB)]
     EC2 --> DeepSeek[DeepSeek multimodal and chat API]
+    EC2 --> Pinecone[(Pinecone policy vectors)]
+    Knowledge[Source-linked Markdown knowledge base] --> Ingestion[LangChain loading and chunking]
+    Ingestion --> Pinecone
     User --> OpenMeteo[Open-Meteo APIs]
 ```
 
-The browser signs in with Cognito and sends an access token with protected API requests. Express verifies the JWT, reads the user's `sub`, and uses it to query that user's DynamoDB records. Subscription screenshots are sent to Express as `multipart/form-data`; the API keeps the provider key on the server and sends the image to the multimodal model for analysis. For conversational requests, LangChain orchestrates the DeepSeek chat model and typed subscription tools. LangGraph maintains thread-scoped short-term memory, while authenticated runtime context ensures that every tool queries only the current user's DynamoDB records.
+The browser signs in with Cognito and sends an access token with protected API requests. Express verifies the JWT, reads the user's `sub`, and uses it to query that user's DynamoDB records. Subscription screenshots are sent to Express as `multipart/form-data`; the API keeps provider keys on the server and sends the image to the multimodal model for analysis. For conversational requests, LangChain orchestrates the DeepSeek chat model, typed subscription tools, policy retrieval, and database operations. LangGraph provides thread-scoped checkpoints and resumable human approval, while Pinecone performs metadata-filtered semantic retrieval over source-linked provider documentation.
 
 See [ARCHITECTURE.md](./ARCHITECTURE.md) for the complete request and deployment flow.
+
+## Agent, RAG, and human approval
+
+The conversational assistant separates three kinds of work:
+
+1. Personal subscription questions use authenticated DynamoDB tools.
+2. Provider-policy questions use a Pinecone-backed RAG tool.
+3. Database-changing actions require human approval before execution.
+
+```text
+User message
+    |
+    v
+LangChain agent
+    |-- Stored subscription question --> DynamoDB read tool
+    |-- Provider policy question ------> Pinecone RAG tool
+    `-- Update or deletion ------------> DynamoDB write tool
+                                             |
+                                             v
+                                        HITL interrupt
+                                             |
+                                             v
+                                   User replies yes or no
+                                             |
+                                             v
+                                      Approve or reject
+```
+
+The policy knowledge base currently covers 11 subscription providers across more than 40 source-linked Markdown documents. An ingestion pipeline loads the documents, extracts metadata, splits long Markdown content into overlapping chunks, and uploads the records to the `knowledge-v1` Pinecone namespace.
+
+At query time, the RAG tool sends the user's policy question to the Pinecone index, filters results by subscription provider, and returns the three most relevant passages. DeepSeek then produces a concise answer grounded in the retrieved content and its source URL.
+
+For amount updates and stored-record deletions, the model first identifies the exact subscription record and proposes a write-tool call. LangChain's human-in-the-loop middleware intercepts the call before execution. LangGraph checkpoints the pending action under the authenticated user's thread ID and resumes it only after the user explicitly replies `yes`; replying `no` rejects the operation.
 
 ## Technology stack
 
@@ -44,9 +86,13 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for the complete request and deployment
 | Frontend | React 19, Vite 7, JavaScript, CSS |
 | Backend | Node.js, Express 5, TypeScript, Multer |
 | Authentication | Amazon Cognito, OAuth 2.0 Authorization Code + PKCE, `aws-jwt-verify` |
-| Data | Amazon DynamoDB, AWS SDK for JavaScript v3 |
-| Agent framework | LangChain `createAgent` and typed tools, LangGraph `MemorySaver`, Zod schemas |
+| Operational data | Amazon DynamoDB, AWS SDK for JavaScript v3 |
+| Knowledge retrieval | Pinecone vector database, integrated embeddings, metadata filtering, top-k semantic search |
+| Agent framework | LangChain `createAgent`, typed tools, human-in-the-loop middleware, model-call limits |
+| Agent state | LangGraph `MemorySaver`, thread-scoped checkpoints, resumable interrupts |
+| Document processing | LangChain document loaders, `MarkdownTextSplitter`, metadata-enriched chunking |
 | Models | DeepSeek multimodal and OpenAI-compatible chat APIs |
+| Validation | Zod tool and runtime-context schemas |
 | Cloud | EC2, Docker, ECR, S3, CloudFront, CodeBuild, Systems Manager, IAM |
 | Delivery | GitHub Actions, AWS SAM, CloudFormation |
 
@@ -100,36 +146,6 @@ SK = SUBS#{subscriptionId}
 
 This lets the API query one user's data without accepting a user ID from the browser.
 
-## Local development
-
-Requirements:
-
-- Node.js 22 or newer
-- AWS credentials that can access the configured DynamoDB tables
-- A Cognito user pool and SPA client
-- A DeepSeek API key for screenshot analysis and the conversational agent
-
-Start the backend:
-
-```bash
-cd backend-express
-cp .env.example .env
-npm install
-npm run dev
-```
-
-Fill `backend-express/.env` with your local configuration. Do not commit this file.
-
-In another terminal, start the frontend:
-
-```bash
-cd frontend-react
-npm install
-npm run dev
-```
-
-The frontend runs at `http://localhost:8000` and calls the local API at `http://localhost:3000/api/v1`. Cognito's local callback and logout URLs must include `http://localhost:8000/`.
-
 ## Validation and deployment
 
 Every push and pull request runs the GitHub Actions CI workflow, which installs dependencies, type-checks and builds the Express API, builds the React frontend, and validates the Cognito SAM template.
@@ -152,4 +168,6 @@ Repository secrets are used for AWS credentials and `DEEPSEEK_API_KEY`; secrets 
 
 ## Project status
 
-SubLens is a working portfolio project with a deployed frontend, authenticated API, persistent user data, multimodal subscription extraction, and a LangChain-powered conversational agent with tool calling and short-term memory. Agent conversations currently use process-local `MemorySaver` checkpoints, so conversational context resets when the Node.js process restarts; durable checkpoint storage is intentionally left as a documented next step.
+SubLens is a working portfolio project with a deployed React frontend, authenticated Express API, persistent DynamoDB user data, multimodal subscription extraction, a tool-using LangChain agent, Pinecone-backed RAG, and checkpointed human approval for write operations.
+
+Agent conversations and pending approvals currently use process-local LangGraph `MemorySaver` checkpoints. They survive requests within the same Node.js process but reset when the backend container restarts. Replacing `MemorySaver` with a durable database-backed checkpointer remains a documented production-hardening step.

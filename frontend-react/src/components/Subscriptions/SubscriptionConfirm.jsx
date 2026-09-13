@@ -31,7 +31,7 @@ function SubscriptionConfirm({ result, auth, setAuth, onAuthExpired, setSubscrip
                 "/subscription/submit",
                 {
                     method: "POST",
-                    body: JSON.stringify(result),
+                    body: JSON.stringify({ ...result, amount: Number(result.amount) }),
                     headers: {
                         "Content-Type": "application/json"
                     }

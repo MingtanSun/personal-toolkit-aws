@@ -12,9 +12,12 @@
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.0.0",
     "@aws-sdk/lib-dynamodb": "^3.0.0",
+    "@langchain/classic": "^1.0.47",
     "@langchain/core": "^1.2.9",
     "@langchain/langgraph": "^1.4.14",
     "@langchain/openai": "^1.5.11",
+    "@langchain/textsplitters": "^1.0.1",
+    "@pinecone-database/pinecone": "^9.0.0",
     "aws-jwt-verify": "^5.0.0",
     "cors": "^2.8.5",
     "dayjs": "^1.11.23",
