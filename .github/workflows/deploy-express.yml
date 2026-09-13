@@ -113,8 +113,9 @@ jobs:
           COGNITO_USER_POOL_ID: us-east-2_Xv3FsshOw
           COGNITO_CLIENT_ID: 62nbd5t1j78c6n8bjici33lgdj
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          PINECONE_API_KEY: ${{ secrets.PINECONE_API_KEY }}
         run: |
-          deploy_command="aws s3 cp s3://$DEPLOYMENT_BUCKET/deploy-container.sh /tmp/deploy-container.sh && chmod +x /tmp/deploy-container.sh && /tmp/deploy-container.sh $REPOSITORY_URI $GITHUB_SHA $AWS_REGION $TASKS_TABLE $SUBSCRIPTIONS_TABLE $COGNITO_USER_POOL_ID $COGNITO_CLIENT_ID $CORS_ORIGIN $DEEPSEEK_API_KEY"
+          deploy_command="aws s3 cp s3://$DEPLOYMENT_BUCKET/deploy-container.sh /tmp/deploy-container.sh && chmod +x /tmp/deploy-container.sh && /tmp/deploy-container.sh $REPOSITORY_URI $GITHUB_SHA $AWS_REGION $TASKS_TABLE $SUBSCRIPTIONS_TABLE $COGNITO_USER_POOL_ID $COGNITO_CLIENT_ID $CORS_ORIGIN $DEEPSEEK_API_KEY $PINECONE_API_KEY"
           parameters=$(jq -n --arg command "$deploy_command" '{commands: [$command]}')
           command_id=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \

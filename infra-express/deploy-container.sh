@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ "$#" -ne 9 ]]; then
-  echo "Usage: deploy-container.sh <repository-uri> <image-tag> <region> <tasks-table> <subscriptions-table> <user-pool> <client-id> <cors-origin> <deepseek-api-key>"
+if [[ "$#" -ne 10 ]]; then
+  echo "Usage: deploy-container.sh <repository-uri> <image-tag> <region> <tasks-table> <subscriptions-table> <user-pool> <client-id> <cors-origin> <deepseek-api-key> <pinecone-api-key>"
   exit 2
 fi
 
@@ -15,6 +15,7 @@ cognito_user_pool_id="$6"
 cognito_client_id="$7"
 cors_origin="$8"
 deepseek_api_key="$9"
+pinecone_api_key="${10}"
 registry="${repository_uri%%/*}"
 
 aws ecr get-login-password --region "$aws_region" \
@@ -33,6 +34,7 @@ docker run -d \
   -e COGNITO_CLIENT_ID="$cognito_client_id" \
   -e CORS_ORIGIN="$cors_origin" \
   -e DEEPSEEK_API_KEY="$deepseek_api_key" \
+  -e PINECONE_API_KEY="$pinecone_api_key" \
   "$repository_uri:$image_tag"
 
 for attempt in $(seq 1 30); do
