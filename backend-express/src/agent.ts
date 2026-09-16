@@ -1,3 +1,4 @@
+import path from "node:path";
 import { ChatOpenAI } from "@langchain/openai";
 import { config } from './config.js';
 import { createAgent, tool, humanInTheLoopMiddleware, modelCallLimitMiddleware, HITLRequest } from "langchain";
@@ -9,7 +10,10 @@ import {
     getTheMostExpensiveSubscription,
     getUpcomingSubscriptions
 } from './agentTools.js';
-import { MemorySaver, isInterrupted } from "@langchain/langgraph";
+import { isInterrupted } from "@langchain/langgraph";
+import {
+  SqliteSaver
+} from "@langchain/langgraph-checkpoint-sqlite";
 import { deleteSubscription, updateSubscriptionAmount } from './subscription.js';
 import { searchSubscriptionKnowledge } from "./pinecone.js";
 import {
@@ -37,10 +41,15 @@ const contextSchema = z.object({
     userId: z.string()
 });
 
-const checkpointer = new MemorySaver();
+const checkpointPath =
+  path.resolve(config.agentCheckpointDbPath);
+
+const checkpointer = SqliteSaver.fromConnString(
+  checkpointPath
+);
 
 const model = new ChatOpenAI({
-    model: 'deepseek-v4-flash',
+    model: 'deepseek-v4-pro',
     apiKey: config.deepseekApiKey,
     configuration: {
         baseURL: "https://api.deepseek.com"
@@ -376,7 +385,8 @@ export async function askModel(message: string, conversationId: string, userId: 
         const request = interrupt!.value;
         const action = request?.actionRequests[0];
         const reviewConfig = request?.reviewConfigs[0];
-        console.log(action);
+        console.log(result.messages);
+        console.log(request!.actionRequests!)
 
         return `Are you sure you want to do this? Please reply 'yes' or 'no'`;
     } else {

@@ -37,6 +37,8 @@ COGNITO_USER_POOL_ID
 COGNITO_CLIENT_ID
 CORS_ORIGIN
 DEEPSEEK_API_KEY
+PINECONE_API_KEY
+AGENT_CHECKPOINT_DB (optional; defaults to ./data/agent-checkpoints.sqlite)
 ```
 
 Keep `.env` and real API keys out of source control.
@@ -77,7 +79,7 @@ The agent endpoint expects JSON:
 }
 ```
 
-It returns `{ "reply": "..." }`. LangChain selects from read-only subscription tools, and LangGraph `MemorySaver` keeps thread-scoped context while the Node.js process remains alive. The memory is intentionally not persisted across backend restarts in this version.
+It returns `{ "reply": "..." }`. LangChain uses a LangGraph SQLite checkpointer for thread-scoped context and pending human approvals. The database is created automatically at `AGENT_CHECKPOINT_DB`; its parent directory must be writable. The Docker image prepares `/app/data` for the non-root `node` user. No volume is mounted, so replacing the container resets agent conversations and pending approvals. Subscription and task records remain in DynamoDB.
 
 ## Commands
 
@@ -94,3 +96,5 @@ npm start          # run the compiled API
 docker build -t sublens-api .
 docker run --env-file .env -p 3000:3000 sublens-api
 ```
+
+The SQLite checkpoint file stays inside the container and is discarded when that container is replaced.

@@ -20,4 +20,7 @@ export const config = {
   corsOrigin: process.env.CORS_ORIGIN || "http://localhost:8000",
   deepseekApiKey: required("DEEPSEEK_API_KEY"),
   pineconeApiKey: required("PINECONE_API_KEY"),
+  agentCheckpointDbPath:
+  process.env.AGENT_CHECKPOINT_DB ||
+  "./data/agent-checkpoints.sqlite"
 };

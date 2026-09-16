@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { apiFetch } from "../../api.js";
+import { apiFetch, readApiErrorMessage } from "../../api.js";
 
 function SubscriptionUploader({ setFile, file, setPreviewUrl, auth, setAuth, onAuthExpired, result, setResult, setShowUpSavetheSubscription }) {
     const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -35,18 +35,31 @@ function SubscriptionUploader({ setFile, file, setPreviewUrl, auth, setAuth, onA
 
         const formData = new FormData();
         formData.append("screenshot", file);
-
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => {
+            controller.abort();
+        }, 45_000);
         try {
             const response = await apiFetch(
                 "/subscription/analyze",
                 {
                     method: "POST",
-                    body: formData
+                    body: formData,
+                    signal: controller.signal
                 },
                 auth,
                 setAuth,
                 onAuthExpired
             );
+
+            if (response.status === 504) {
+                setAnalyzeMessage(await readApiErrorMessage(
+                    response,
+                    'AI analysis timed out. Please try again.'
+                ));
+                setAnalyzeError(true);
+                return;
+            }
 
             if (!response.ok) {
                 throw new Error('Could not analyze this screenshot.');
@@ -58,11 +71,18 @@ function SubscriptionUploader({ setFile, file, setPreviewUrl, auth, setAuth, onA
             setShowUpSavetheSubscription(true);
             setAnalyzeMessage('Screenshot analyzed successfully. Review the information below.');
         } catch (error) {
-            console.log(error);
-            setAnalyzeMessage('Could not analyze this screenshot. Please try again.');
+            if (error.name === "AbortError") {
+                setAnalyzeMessage(
+                    "Image analysis timed out. Please try again."
+                );
+            }
+            else {
+                setAnalyzeMessage('Could not analyze this screenshot. Please try again.');
+            }
             setAnalyzeError(true);
         } finally {
             setIsAnalyzing(false);
+            clearTimeout(timeoutId);
         }
     }
 

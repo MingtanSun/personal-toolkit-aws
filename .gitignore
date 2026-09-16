@@ -7,3 +7,7 @@ node_modules/
 dist/
 .env
 AGENT_RAG_CHALLENGE.md
+backend-express/data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal

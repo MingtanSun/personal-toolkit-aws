@@ -15,6 +15,7 @@
     "@langchain/classic": "^1.0.47",
     "@langchain/core": "^1.2.9",
     "@langchain/langgraph": "^1.4.14",
+    "@langchain/langgraph-checkpoint-sqlite": "^1.0.4",
     "@langchain/openai": "^1.5.11",
     "@langchain/textsplitters": "^1.0.1",
     "@pinecone-database/pinecone": "^9.0.0",

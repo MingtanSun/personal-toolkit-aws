@@ -180,7 +180,9 @@ export async function updateSubscriptionAmount(userId: string,
 export async function analyzeSubscriptionImage(mimetype: string, base64Image: string, subscriptions: Subscriptions[]) {
     const deepseek = new OpenAI({
         baseURL: 'https://api.deepseek.com',
-        apiKey: config.deepseekApiKey
+        apiKey: config.deepseekApiKey,
+        timeout: 20_000,
+        maxRetries: 0
     });
 
     const response = await deepseek.chat.completions.create({

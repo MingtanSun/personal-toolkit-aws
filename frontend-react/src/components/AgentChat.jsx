@@ -15,11 +15,22 @@ function AgentChat({ auth, setAuth, onAuthExpired }) {
     {
       id: "welcome",
       role: "assistant",
-      text: "Hi, I’m your SubLens assistant. Ask me about your subscriptions."
+      text: "Hi, I'm your SubLens assistant. Ask me about your subscriptions."
     }
   ]);
   const [sending, setSending] = useState(false);
-  const [conversationId] = useState(() => crypto.randomUUID());
+  const [conversationId, setConversationId] = useState(() => {
+    const exsiting = localStorage.getItem('agentConversationId');
+
+    if (exsiting) {
+      return exsiting;
+    }
+    const create = crypto.randomUUID();
+    localStorage.setItem('agentConversationId', create);
+    return create;
+
+  });
+
   const inputRef = useRef(null);
   const messagesRef = useRef(null);
 
@@ -56,7 +67,10 @@ function AgentChat({ auth, setAuth, onAuthExpired }) {
     setMessages(current => [...current, userMessage]);
     setInput("");
     setSending(true);
-
+    const abortController = new AbortController();
+    const abortTimeOut = setTimeout(() => {
+      abortController.abort();
+    }, 15_000);
     try {
       const res = await apiFetch(
         "/agent/message",
@@ -65,8 +79,10 @@ function AgentChat({ auth, setAuth, onAuthExpired }) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             message: content,
-            conversationId: conversationId
-          })
+            conversationId: conversationId,
+
+          }),
+          signal: abortController.signal
         },
         auth,
         setAuth,
@@ -74,6 +90,14 @@ function AgentChat({ auth, setAuth, onAuthExpired }) {
       );
 
       const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || `Request failed: ${res.status}`);
+      }
+
+      if (typeof data.reply !== "string" || !data.reply) {
+        throw new Error("Agent returned an invalid response");
+      }
+
       if (data.reply) {
         setMessages(current => [
           ...current,
@@ -85,10 +109,33 @@ function AgentChat({ auth, setAuth, onAuthExpired }) {
       }
 
     } catch (error) {
-      console.error(error);
+      if (error.name === "AbortError") {
+        console.log('time out');
+        setMessages(current => [...current,
+        { id: crypto.randomUUID(), role: "assistant", text: 'request timeout' }
+        ]);
+      } else {
+        console.error(error);
+      }
+
     } finally {
       setSending(false);
+      clearTimeout(abortTimeOut)
     }
+  }
+
+  function createNewChat() {
+    const newConversationId = crypto.randomUUID();
+    setConversationId(newConversationId);
+    localStorage.setItem('agentConversationId', newConversationId);
+    setMessages([
+      {
+        id: "welcome",
+        role: "assistant",
+        text: "Hi, I'm your SubLens assistant. Ask me about your subscriptions."
+      }
+    ]);
+    setInput("");
   }
 
   return (
@@ -99,6 +146,9 @@ function AgentChat({ auth, setAuth, onAuthExpired }) {
             <div>
               <p className="agent-eyebrow">AI assistant</p>
               <h2 className="agent-title">Ask SubLens</h2>
+            </div>
+            <div>
+              <button className="agent-new-chat" onClick={createNewChat}>New Chat</button>
             </div>
             <button
               type="button"

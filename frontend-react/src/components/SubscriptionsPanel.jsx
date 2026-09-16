@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { loadSubscription } from "./Subscriptions/utils/SubsUtils.js";
 import SubscriptionUploader from "./Subscriptions/SubscriptionUploader.jsx";
-import SubscriptionInfoRender from "./Subscriptions/SubscriptionInfoRender.jsx";
-import SubscriptionConfirm from "./Subscriptions/SubscriptionConfirm.jsx";
+import { SubmitForm } from "./Subscriptions/SubmitForm.jsx";
 import { DisplaySubscription } from "./Subscriptions/DisplaySubscription.jsx";
 
 function SubscriptionsPanel({ auth, setAuth, onAuthExpired }) {
@@ -85,21 +84,16 @@ function SubscriptionsPanel({ auth, setAuth, onAuthExpired }) {
                             <p className="card-sub">Check the fields before saving your subscription.</p>
                         </div>
                     </div>
-                <SubscriptionInfoRender result={result} setResult={setResult} />
-                </div>
-
-                <div className="subscription-confirm-area">
-                {result && (
-                    <SubscriptionConfirm
-                        result={result}
-                        setSubscriptions={setSubscriptions}
-                        auth={auth}
-                        setAuth={setAuth}
-                        onAuthExpired={onAuthExpired}
-                        showUpSavetheSubscription={showUpSavetheSubscription}
-                        setShowUpSavetheSubscription={setShowUpSavetheSubscription}
-                    />
-                )}
+                <SubmitForm
+                    result={result}
+                    setResult={setResult}
+                    setSubscriptions={setSubscriptions}
+                    auth={auth}
+                    setAuth={setAuth}
+                    onAuthExpired={onAuthExpired}
+                    showUpSavetheSubscription={showUpSavetheSubscription}
+                    setShowUpSavetheSubscription={setShowUpSavetheSubscription}
+                />
                 </div>
             </section>
 

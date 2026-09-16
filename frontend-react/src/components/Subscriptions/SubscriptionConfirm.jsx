@@ -1,7 +1,7 @@
 import { apiFetch } from "../../api.js";
 import { loadSubscription } from "./utils/SubsUtils.js";
 
-function SubscriptionConfirm({ result, auth, setAuth, onAuthExpired, setSubscriptions,showUpSavetheSubscription, setShowUpSavetheSubscription }) {
+function SubscriptionConfirm({ result, auth, setAuth, onAuthExpired, setSubscriptions, setShowUpSavetheSubscription, onSaved }) {
     async function submitInfoToBackend() {
         if (!result) {
             return;
@@ -46,15 +46,16 @@ function SubscriptionConfirm({ result, auth, setAuth, onAuthExpired, setSubscrip
             }
 
             await response.json();
+            setShowUpSavetheSubscription(false);
+            onSaved();
+            const subsResult = await loadSubscription(auth, setAuth, onAuthExpired);
+            setSubscriptions(subsResult);
         } catch (error) {
             console.log(error.message);
         }
-        setShowUpSavetheSubscription(false);
-        const subsResult = await loadSubscription(auth, setAuth, onAuthExpired);
-        setSubscriptions(subsResult);
     }
 
-    return <button className="btn-primary subscription-save-button" disabled={!showUpSavetheSubscription} onClick={submitInfoToBackend}>Save this Subscription</button>;
+    return (<button className="btn-primary subscription-save-button"   onClick={submitInfoToBackend}>Save this Subscription</button>);
 }
 
 export default SubscriptionConfirm;

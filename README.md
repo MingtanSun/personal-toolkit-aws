@@ -89,7 +89,7 @@ For amount updates and stored-record deletions, the model first identifies the e
 | Operational data | Amazon DynamoDB, AWS SDK for JavaScript v3 |
 | Knowledge retrieval | Pinecone vector database, integrated embeddings, metadata filtering, top-k semantic search |
 | Agent framework | LangChain `createAgent`, typed tools, human-in-the-loop middleware, model-call limits |
-| Agent state | LangGraph `MemorySaver`, thread-scoped checkpoints, resumable interrupts |
+| Agent state | LangGraph SQLite checkpointer, thread-scoped checkpoints, resumable interrupts |
 | Document processing | LangChain document loaders, `MarkdownTextSplitter`, metadata-enriched chunking |
 | Models | DeepSeek multimodal and OpenAI-compatible chat APIs |
 | Validation | Zod tool and runtime-context schemas |
@@ -170,4 +170,4 @@ Repository secrets are used for AWS credentials and `DEEPSEEK_API_KEY`; secrets 
 
 SubLens is a working portfolio project with a deployed React frontend, authenticated Express API, persistent DynamoDB user data, multimodal subscription extraction, a tool-using LangChain agent, Pinecone-backed RAG, and checkpointed human approval for write operations.
 
-Agent conversations and pending approvals currently use process-local LangGraph `MemorySaver` checkpoints. They survive requests within the same Node.js process but reset when the backend container restarts. Replacing `MemorySaver` with a durable database-backed checkpointer remains a documented production-hardening step.
+Agent conversations and pending approvals use a SQLite checkpoint database inside the backend container. They survive backend process restarts while the container remains in place, but replacing the container during deployment resets them. This project intentionally does not mount a persistent volume for agent checkpoints; subscription and task data remain in DynamoDB.

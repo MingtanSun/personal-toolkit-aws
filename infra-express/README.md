@@ -23,6 +23,8 @@ The `.github/workflows/deploy-express.yml` workflow performs the application dep
 5. Replace the running container and inject its environment variables.
 6. Verify the public `/health` endpoint.
 
+The backend image creates a writable `/app/data` directory for its SQLite agent checkpoints. Deployment replaces the container without a volume mount, so conversation context and pending approvals reset each time. Subscription and task records remain in DynamoDB.
+
 The workflow receives `DEEPSEEK_API_KEY` from GitHub Actions secrets. It is not stored in the repository or Docker image.
 
 The default CloudFormation stack name is `clouddesk-express`; the older resource name is retained to avoid replacing working infrastructure when the frontend brand changed to SubLens.

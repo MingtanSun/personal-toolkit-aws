@@ -1620,6 +1620,32 @@ html[data-theme="dark"] .agent-panel {
   line-height: 1.25;
 }
 
+.agent-new-chat {
+  height: 32px;
+  padding: 0 11px;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.agent-new-chat:hover {
+  color: var(--text);
+  background: var(--hover);
+  border-color: var(--accent-blue);
+}
+
+.agent-new-chat:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+}
+
 .agent-close {
   width: 32px;
   height: 32px;

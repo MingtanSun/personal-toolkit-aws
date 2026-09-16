@@ -13,6 +13,7 @@ import {
 } from "./tasks.js";
 import { addSubscription, loadSubscription, deleteSubscription, updateSubscription, analyzeSubscriptionImage } from "./subscription.js";
 import { askModel } from './agent.js';
+import { APIConnectionTimeoutError } from "openai";
 
 const app = express();
 
@@ -104,10 +105,20 @@ app.post('/api/v1/subscription/analyze',
     }
     const base64Image = req.file!.buffer.toString("base64");
     const subscriptions = await loadSubscription(userId);
-    //console.log(subscriptions);
-    const result = await analyzeSubscriptionImage(req.file!.mimetype, base64Image, subscriptions);
-    console.log(result);
-    return res.status(201).json(result);
+    try {
+      const result = await analyzeSubscriptionImage(req.file!.mimetype, base64Image, subscriptions);
+      console.log(result);
+      return res.status(201).json(result);
+    } catch (error) {
+      if (error instanceof APIConnectionTimeoutError) {
+        return res.status(504).json({
+          code: "AI_TIMEOUT",
+          message: "AI analysis timed out. Please try again."
+        });
+      }
+
+      throw error;
+    }
   });
 
 app.post('/api/v1/subscription/submit', async (req, res, next) => {
